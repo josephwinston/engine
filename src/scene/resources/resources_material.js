@@ -21,7 +21,6 @@ pc.extend(pc.resources, function () {
     };
 
     MaterialResourceLoader.prototype.load = function (materialId) {
-        // materialCache = {};
         if (!this._cache[materialId]) {
             var material = new pc.scene.PhongMaterial();
             var asset = this._assets.getAssetByResourceId(materialId);
@@ -39,7 +38,6 @@ pc.extend(pc.resources, function () {
                         this._updatePhongMaterial(material, value);
                     }
                 }, this);
-            }
 
             this._cache[materialId] = material;
         }

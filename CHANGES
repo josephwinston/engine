@@ -3,6 +3,82 @@ PlayCanvas Runtime Changes
 --------------------------
 
 --------
+v0.151.0
+--------
+* Updated build.py for Git
+
+--------
+v0.150.1
+--------
+* Increased decimal precision of camera clip planes to 5.
+* Show 3 arrows for directional light gizmo.
+
+--------
+v0.150.0
+--------
+* Added PostEffectQueue#setRenderTargetScale which means post effects can use buffers larger or smaller than the canvas
+* Added GraphNode#findByPath and GraphNode#getPath for querying scene hierarchy.
+
+--------
+v0.149.2
+--------
+* [FIX] Backout last change and use last version of ammo because raycasting works differently in latest version
+
+--------
+v0.149.1
+--------
+* [FIX] Bug with casting collision object to a btRigidBody in raycastFirst.
+
+--------
+v0.149.0
+--------
+* Added shadowDistance property to the scene, beyond which shadows are not rendered.
+* [FIX] Update the scene's shaders when shadows are toggled.
+
+--------
+v0.148.0
+--------
+* Updated ammo.js to latest kripken master branch
+
+--------
+v0.147.9
+--------
+* [FIX] Typo in default clear options.
+
+--------
+v0.147.8
+--------
+* [FIX] screenToWorld now works for orthographic cameras.
+
+--------
+v0.147.7
+--------
+* Added 'resizecanvas' event fired from the pc.gfx.Device
+* [FIX] Render targets of post effects are now resized when necessary
+* Added optimization for events#fire method
+
+--------
+v0.147.6
+--------
+* [FIX] Only add material to material cache if its asset is found in the asset registry
+
+--------
+v0.147.5
+--------
+* [FIX] Delete the cached model when in onAssetChange
+* [FIX] Add onAssetChange listener even when we're not in the designer so that we catch changes to model mappings that come from the designer via livelink
+* [FIX] New assets are now added to the asset registry via livelink
+* Fixes in README.md
+* Updated examples
+
+--------
+v0.147.4
+--------
+* Added animation example and Playbot model
+* Added post effects and camera scripts under extras
+* Added LICENSE file
+
+--------
 v0.147.3
 --------
 * Improve float packing algorithm (used for shadow mapping).

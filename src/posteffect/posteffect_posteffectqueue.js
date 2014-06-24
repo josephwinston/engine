@@ -18,6 +18,9 @@ pc.extend(pc.posteffect, function () {
         // require a depth buffer
         this.depthTarget = null;
 
+        this.renderTargetScale = 1;
+        this.resizeTimeout = null;
+
         camera.on('set_rect', this.onCameraRectChanged, this);
 
         this.previous
@@ -34,8 +37,9 @@ pc.extend(pc.posteffect, function () {
          */
         _createOffscreenTarget: function (useDepth) {
             var rect = this.camera.rect;
-            var width = Math.floor(rect.z * this.context.graphicsDevice.width);
-            var height = Math.floor(rect.w * this.context.graphicsDevice.height);
+
+            var width = Math.floor(rect.z * this.context.graphicsDevice.width * this.renderTargetScale);
+            var height = Math.floor(rect.w * this.context.graphicsDevice.height * this.renderTargetScale);
 
             var colorBuffer = new pc.gfx.Texture(this.context.graphicsDevice, {
                 format: pc.gfx.PIXELFORMAT_R8_G8_B8_A8,
@@ -65,6 +69,11 @@ pc.extend(pc.posteffect, function () {
             // used by the forward renderer to render the scene with
             // a depth shader on the depth target
             this.camera.camera._depthTarget = depthTarget;
+        },
+
+        setRenderTargetScale: function (scale) {
+            this.renderTargetScale = scale;
+            this.resizeRenderTargets();
         },
 
         /**
@@ -204,6 +213,8 @@ pc.extend(pc.posteffect, function () {
                 var effects = this.effects;
                 var camera = this.camera;
 
+                this.context.graphicsDevice.on('resizecanvas', this._onCanvasResized, this);
+
                 // set the camera's rect to full screen. Set it directly to the
                 // camera node instead of the component because we want to keep the old
                 // rect set in the component for restoring the camera to its original settings
@@ -244,6 +255,8 @@ pc.extend(pc.posteffect, function () {
             if (this.enabled) {
                 this.enabled = false;
 
+                this.context.graphicsDevice.off('resizecanvas', this._onCanvasResized, this);
+
                 this.camera.renderTarget = null;
                 this.camera.camera._depthTarget = null;
                 var rect = this.camera.rect;
@@ -257,10 +270,19 @@ pc.extend(pc.posteffect, function () {
             }
         },
 
+        _onCanvasResized: function (width, height) {
+            // avoid resizing the render targets too often by using a timeout
+            if (this.resizeTimeout) {
+                clearTimeout(this.resizeTimeout);
+            }
+
+            this.resizeTimeout = setTimeout(this.resizeRenderTargets.bind(this), 500);
+        },
+
         resizeRenderTargets: function () {
             var rect = this.camera.rect;
-            var desiredWidth = Math.floor(rect.z * this.context.graphicsDevice.width);
-            var desiredHeight = Math.floor(rect.w * this.context.graphicsDevice.height);
+            var desiredWidth = Math.floor(rect.z * this.context.graphicsDevice.width * this.renderTargetScale);
+            var desiredHeight = Math.floor(rect.w * this.context.graphicsDevice.height * this.renderTargetScale);
 
             var effects = this.effects;
 

@@ -63,8 +63,9 @@ pc.extend(pc.fw, function () {
                 var model = resources[0];
                 if (this.system.context.designer) {
                     model.generateWireframe();
-                    asset.on('change', this.onAssetChange, this);
                 }
+
+                asset.on('change', this.onAssetChange, this);
 
                 if (this.data.type === 'asset') {
                     this.model = model;
@@ -214,7 +215,18 @@ pc.extend(pc.fw, function () {
             // if the type of the value is not a string assume it is an pc.Asset
             var guid = typeof newValue === 'string' || !newValue ? newValue : newValue.resourceId;
 
-            material = guid ? this.materialLoader.load(guid) : this.system.defaultMaterial;
+            var material;
+
+            // try to load the material asset
+            if (guid) {
+                material = this.materialLoader.load(guid);
+            }
+
+            // if no material asset was loaded then use the default material
+            if (!material) {
+                material = this.system.defaultMaterial;
+            }
+
             this.material = material;
 
             var oldValue = this.data.materialAsset;
@@ -281,6 +293,7 @@ pc.extend(pc.fw, function () {
         */
         onAssetChange: function (asset) {
             // Remove the asset from the cache and reload it
+            asset.resource = null;
             this.system.context.loader.removeFromCache(asset.getFileUrl());
             this.asset = null;
             this.asset = asset.resourceId;
