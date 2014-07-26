@@ -36,8 +36,6 @@ pc.extend(pc.fw, function () {
             set: this.setMaterialAsset.bind(this),
             get: this.getMaterialAsset.bind(this)
         });
-
-        this.materialLoader = new pc.resources.MaterialResourceLoader(system.context.graphicsDevice, system.context.assets);
     };
     ModelComponent = pc.inherits(ModelComponent, pc.fw.Component);
 
@@ -219,7 +217,23 @@ pc.extend(pc.fw, function () {
 
             // try to load the material asset
             if (guid) {
-                material = this.materialLoader.load(guid);
+                var asset = this.system.context.assets.getAssetByResourceId(guid);
+                if (asset) {
+                    if (asset.resource) {
+                        material = asset.resource;
+                        this.material = material;
+                    } else {
+                        // setting material asset to an asset that hasn't been loaded yet.
+                        // this should only be at tool-time
+                        this.system.context.assets.load(asset).then(function (materials) {
+                            this.material = materials[0];
+                        }.bind(this))
+                    }
+                } else {
+                    console.error(pc.string.format("Entity '{0}' is trying to load Material Asset {1} which no longer exists. Maybe this model was once a primitive shape?", this.entity.getName(), guid));
+                }
+
+
             }
 
             // if no material asset was loaded then use the default material

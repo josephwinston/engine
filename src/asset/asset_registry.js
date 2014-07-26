@@ -54,6 +54,9 @@ pc.extend(pc.asset, function () {
             }
         },
 
+        /**
+        * @private
+        */
         createAndAddAsset: function (resourceId, assetData) {
             var asset = new pc.asset.Asset(assetData.name, assetData.type, assetData.file, assetData.data, this._prefix);
             asset.resourceId = resourceId; // override default resourceId
@@ -135,7 +138,6 @@ pc.extend(pc.asset, function () {
         },
 
         /**
-        * @private
         * @function
         * @name pc.asset.AssetRegistry#findAll
         * @description Return all Assets with the specified name and type found in the registry
@@ -168,7 +170,6 @@ pc.extend(pc.asset, function () {
         },
 
         /**
-        * @private
         * @function
         * @name pc.asset.AssetRegistry#find
         * @description Return the first Asset with the specified name and type found in the registry
@@ -249,6 +250,9 @@ pc.extend(pc.asset, function () {
                     case pc.asset.ASSET_TEXTURE:
                         requests.push(this._createTextureRequest(asset, results[index]));
                         break;
+                    case pc.asset.ASSET_MATERIAL:
+                        requests.push(this._createMaterialRequest(asset));
+                        break;
                     default: {
                         requests.push(this._createAssetRequest(asset));
                         break;
@@ -258,14 +262,11 @@ pc.extend(pc.asset, function () {
 
             // request all assets, then attach loaded resources onto asset
             return this.loader.request(requests.filter(function (r) { return r !== null; }), options).then(function (resources) {
-
                 var promise = new pc.promise.Promise(function (resolve, reject) {
                     var index = 0;
                     requests.forEach(function (r, i) {
                         if (r) {
                             assets[i].resource = resources[index++];
-                        } else {
-                            assets[i].resource = null;
                         }
                     });
                     resolve(resources);
@@ -411,6 +412,16 @@ pc.extend(pc.asset, function () {
 
         _createTextureRequest: function (asset, texture) {
             return new pc.resources.TextureRequest(asset.getFileUrl(), null, texture);
+        },
+
+        _createMaterialRequest: function (asset) {
+            var url = asset.getFileUrl();
+            if (url) {
+                return new pc.resources.MaterialRequest(url);
+            } else {
+                return new pc.resources.MaterialRequest("asset://" + asset.resourceId);
+            }
+
         }
     };
 
