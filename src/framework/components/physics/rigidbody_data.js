@@ -1,10 +1,10 @@
-pc.extend(pc.fw, function () {
+pc.extend(pc, function () {
     /**
     * @private
-    * @name pc.fw.RigidBodyComponentData
+    * @name pc.RigidBodyComponentData
     * @constructor Create a new data structure for a RigidBodyComponent
     * @class Contains data for the RigidBodyComponent
-    * @extends pc.fw.ComponentData
+    * @extends pc.ComponentData
     */
     var RigidBodyComponentData = function () {
         this.enabled = true;
@@ -17,13 +17,16 @@ pc.extend(pc.fw, function () {
         this.friction = 0.5;
         this.restitution = 0;
 
-        this.type = pc.fw.RIGIDBODY_TYPE_STATIC;
+        this.type = pc.BODYTYPE_STATIC;
+
+        this.group = pc.BODYGROUP_STATIC;
+        this.mask = pc.BODYMASK_NOT_STATIC;
 
         // Non-serialized properties
         this.body = null;
         this.simulationEnabled = false;
     };
-    RigidBodyComponentData = pc.inherits(RigidBodyComponentData, pc.fw.ComponentData);
+    RigidBodyComponentData = pc.inherits(RigidBodyComponentData, pc.ComponentData);
 
     return {
         RigidBodyComponentData: RigidBodyComponentData

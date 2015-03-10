@@ -1,24 +1,24 @@
-pc.extend(pc.fw, function () {
+pc.extend(pc, function () {
     /**
-     * @name pc.fw.AnimationComponentSystem
+     * @name pc.AnimationComponentSystem
      * @constructor Create an AnimationComponentSystem
      * @class The AnimationComponentSystem is manages creating and deleting AnimationComponents
-     * @param {pc.fw.ApplicationContext} context The ApplicationContext for the current application 
-     * @extends pc.fw.ComponentSystem
+     * @param {pc.Application} app The Application for the current application
+     * @extends pc.ComponentSystem
      */
-    var AnimationComponentSystem = function AnimationComponentSystem (context) {
+    var AnimationComponentSystem = function AnimationComponentSystem (app) {
         this.id = 'animation';
         this.description = "Specifies the animation assets that can run on the model specified by the Entity's model Component.";
 
-        context.systems.add(this.id, this);
+        app.systems.add(this.id, this);
 
-        this.ComponentType = pc.fw.AnimationComponent;
-        this.DataType = pc.fw.AnimationComponentData;
+        this.ComponentType = pc.AnimationComponent;
+        this.DataType = pc.AnimationComponentData;
 
         this.schema = [{
             name: "enabled",
             displayName: "Enabled",
-            description: "Disabled animation components do not play any animations",
+            description: "Enable or disable the component",
             type: "boolean",
             defaultValue: true
         },{
@@ -37,7 +37,6 @@ pc.extend(pc.fw, function () {
             description: "Scale the animation playback speed",
             type: "number",
             options: {
-                min: 0.0,
                 step: 0.1
             },
             defaultValue: 1.0
@@ -103,10 +102,10 @@ pc.extend(pc.fw, function () {
         this.on('remove', this.onRemove, this);
         this.on('update', this.onUpdate, this);
 
-        pc.fw.ComponentSystem.on('update', this.onUpdate, this);
+        pc.ComponentSystem.on('update', this.onUpdate, this);
     };
-    AnimationComponentSystem = pc.inherits(AnimationComponentSystem, pc.fw.ComponentSystem);
-    
+    AnimationComponentSystem = pc.inherits(AnimationComponentSystem, pc.ComponentSystem);
+
     pc.extend(AnimationComponentSystem.prototype, {
         initializeComponentData: function (component, data, properties) {
             properties = ['activate', 'loop', 'speed', 'assets', 'enabled'];
@@ -115,7 +114,7 @@ pc.extend(pc.fw, function () {
 
         cloneComponent: function (entity, clone) {
             var component = this.addComponent(clone, {});
-            
+
             clone.animation.data.assets = pc.extend([], entity.animation.assets);
             clone.animation.data.speed = entity.animation.speed;
             clone.animation.data.loop = entity.animation.loop;
@@ -129,7 +128,7 @@ pc.extend(pc.fw, function () {
             delete data.animation;
             delete data.skeleton;
             delete data.fromSkel;
-            delete data.toSkel;            
+            delete data.toSkel;
         },
 
         onUpdate: function (dt) {
@@ -166,12 +165,12 @@ pc.extend(pc.fw, function () {
 
                             skeleton.updateGraph();
                         }
-                    }            
+                    }
                 }
-            }            
+            }
         }
     });
-    
+
     return {
         AnimationComponentSystem: AnimationComponentSystem
     };

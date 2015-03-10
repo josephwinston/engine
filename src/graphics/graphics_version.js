@@ -1,4 +1,6 @@
-pc.extend(pc.gfx, function () {
+pc.extend(pc, function () {
+    'use strict';
+
     var Version = function () {
         // Set the variables
         this.globalId = 0;

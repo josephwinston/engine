@@ -1,18 +1,18 @@
-pc.extend(pc.fw, function () {
+pc.extend(pc, function () {
     /**
-     * @name pc.fw.AudioSourceComponentSystem
-     * @constructor AudioSourceComponentSystem controls playback of an audio sample 
-     * @param {pc.fw.ApplicationContext} context The ApplicationContext
-     * @param {pc.audio.AudioContext} audioContext AudioContext object used to create sources and filters
-     * @extends pc.fw.ComponentSystem
+     * @name pc.AudioSourceComponentSystem
+     * @constructor AudioSourceComponentSystem controls playback of an audio sample
+     * @param {pc.Application} app The Application
+     * @param {pc.AudioContext} audioContext AudioContext object used to create sources and filters
+     * @extends pc.ComponentSystem
      */
-    var AudioSourceComponentSystem = function (context, manager) {
+    var AudioSourceComponentSystem = function (app, manager) {
         this.id = "audiosource";
         this.description = "Specifies audio assets that can be played at the position of the Entity.";
-        context.systems.add(this.id, this);
-    
-        this.ComponentType = pc.fw.AudioSourceComponent;
-        this.DataType = pc.fw.AudioSourceComponentData;
+        app.systems.add(this.id, this);
+
+        this.ComponentType = pc.AudioSourceComponent;
+        this.DataType = pc.AudioSourceComponentData;
 
         this.schema = [{
             name: "enabled",
@@ -66,7 +66,7 @@ pc.extend(pc.fw, function () {
         }, {
             name: "3d",
             displayName: "3d",
-            description: "3d sounds are positioned in space, and their sound is dependent on listener position/orientation. Non-3d sounds are uniform aross space",
+            description: "3d sounds are positioned in space, and their sound is dependent on listener position/orientation. Non-3d sounds are uniform across space",
             type: "boolean",
             defaultValue: true
         }, {
@@ -111,38 +111,42 @@ pc.extend(pc.fw, function () {
         }];
 
         this.exposeProperties();
-        
+
         this.manager = manager;
-        
-        pc.fw.ComponentSystem.on('initialize', this.onInitialize, this);
-        pc.fw.ComponentSystem.on('update', this.onUpdate, this);
+
+        this.initialized = false;
+
+        pc.ComponentSystem.on('initialize', this.onInitialize, this);
+        pc.ComponentSystem.on('update', this.onUpdate, this);
     };
-    AudioSourceComponentSystem = pc.inherits(AudioSourceComponentSystem, pc.fw.ComponentSystem);
-    
+    AudioSourceComponentSystem = pc.inherits(AudioSourceComponentSystem, pc.ComponentSystem);
+
     pc.extend(AudioSourceComponentSystem.prototype, {
         initializeComponentData: function (component, data, properties) {
-            properties = ['enabled', 'assets', 'volume', 'pitch', 'loop', 'activate', '3d', 'minDistance', 'maxDistance', 'rollOffFactor'];
+            properties = ['activate', 'volume', 'pitch', 'loop', '3d', 'minDistance', 'maxDistance', 'rollOffFactor', 'enabled', 'assets'];
             AudioSourceComponentSystem._super.initializeComponentData.call(this, component, data, properties);
-        
-            component.paused = !(component.enabled && data.activate);
+
+            component.paused = !(component.enabled && component.activate);
         },
 
         onInitialize: function(root) {
-            if (root.audiosource && 
+            if (root.audiosource &&
                 root.enabled &&
                 root.audiosource.enabled &&
                 root.audiosource.activate) {
-                
+
                 root.audiosource.play(root.audiosource.currentSource);
             }
-            
+
             var children = root.getChildren();
             var i, len = children.length;
             for (i = 0; i < len; i++) {
-                if (children[i] instanceof pc.fw.Entity) {
-                    this.onInitialize(children[i]);    
+                if (children[i] instanceof pc.Entity) {
+                    this.onInitialize(children[i]);
                 }
-            } 
+            }
+
+            this.initialized = true;
         },
 
         onUpdate: function(dt) {
@@ -153,9 +157,9 @@ pc.extend(pc.fw, function () {
                     var component = components[id];
                     var entity = component.entity;
                     var componentData = component.data;
-                    
+
                     // Update channel position if this is a 3d sound
-                    if (componentData.enabled && entity.enabled && componentData.channel instanceof pc.audio.Channel3d) {
+                    if (componentData.enabled && entity.enabled && componentData.channel instanceof pc.Channel3d) {
                         var pos = entity.getPosition();
                         componentData.channel.setPosition(pos);
                     }
@@ -164,7 +168,7 @@ pc.extend(pc.fw, function () {
         },
 
         /**
-         * @name pc.fw.AudioSourceComponentSystem#setVolume()
+         * @name pc.AudioSourceComponentSystem#setVolume()
          * @function
          * @description Set the volume for the entire AudioSource system. All sources will have their volume multiplied by this value
          * @param {Number} value The value to set the volume to. Valid from 0.0 - 1.0
@@ -173,7 +177,7 @@ pc.extend(pc.fw, function () {
             this.manager.setVolume(volume);
         }
     });
-    
+
     return {
         AudioSourceComponentSystem: AudioSourceComponentSystem
     };

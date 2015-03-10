@@ -1,18 +1,18 @@
-pc.extend(pc.fw, function () {
+pc.extend(pc, function () {
 /**
-     * @name pc.fw.LightComponentSystem
+     * @name pc.LightComponentSystem
      * @constructor Create a new LightComponentSystem.
      * @class A Light Component is used to dynamically light the scene.
-     * @param {pc.fw.ApplicationContext} context The application context.
-     * @extends pc.fw.ComponentSystem
+     * @param {pc.Application} app The application.
+     * @extends pc.ComponentSystem
      */
-    var LightComponentSystem = function (context) {
+    var LightComponentSystem = function (app) {
         this.id = 'light';
         this.description = "Enables the Entity to emit light."
-        context.systems.add(this.id, this);
+        app.systems.add(this.id, this);
 
-        this.ComponentType = pc.fw.LightComponent;
-        this.DataType = pc.fw.LightComponentData;
+        this.ComponentType = pc.LightComponent;
+        this.DataType = pc.LightComponentData;
 
         this.schema = [{
             name: "enabled",
@@ -47,7 +47,7 @@ pc.extend(pc.fw, function () {
         }, {
             name: "intensity",
             displayName: "Intensity",
-            description: "Factors the light color",
+            description: "The intensity of the light",
             type: "number",
             defaultValue: 1,
             options: {
@@ -60,9 +60,20 @@ pc.extend(pc.fw, function () {
             displayName: "Cast Shadows",
             description: "Cast shadows from this light",
             type: "boolean",
-            defaultValue: false,
+            defaultValue: false
+        }, {
+            name: 'shadowDistance',
+            displayName: 'Shadow Distance',
+            description: 'Camera distance at which shadows are no longer rendered',
+            type: 'number',
+            options: {
+                min: 0,
+                decimalPrecision: 5
+            },
+            defaultValue: 40,
             filter: {
-                type: ['directional', 'spot']
+                castShadows: true,
+                type: 'directional'
             }
         }, {
             name: "shadowResolution",
@@ -71,6 +82,9 @@ pc.extend(pc.fw, function () {
             type: "enumeration",
             options: {
                 enumerations: [{
+                    name: '128',
+                    value: 128
+                }, {
                     name: '256',
                     value: 256
                 }, {
@@ -86,9 +100,39 @@ pc.extend(pc.fw, function () {
             },
             defaultValue: 1024,
             filter: {
-                type: ['directional', 'spot']
+                castShadows: true
             }
         }, {
+            name: 'shadowBias',
+            displayName: 'Shadow Bias',
+            description: 'Tunes the shadows to reduce rendering artifacts',
+            type: 'number',
+            options: {
+                min: 0,
+                max: 1,
+                decimalPrecision: 5,
+                step: 0.01
+            },
+            defaultValue: 0.05,
+            filter: {
+                castShadows: true
+            }
+        }, {
+            name: 'normalOffsetBias',
+            displayName: 'Normal Offset Shadow Bias',
+            description: 'Tunes the shadows to reduce rendering artifacts',
+            type: 'number',
+            options: {
+                min: 0,
+                max: 1,
+                decimalPrecision: 5,
+                step: 0.01
+            },
+            defaultValue: 0.0,
+            filter: {
+                castShadows: true
+            }
+        },{
             name: "range",
             displayName: "Range",
             description: "The distance from the light where its contribution falls to zero",
@@ -97,6 +141,24 @@ pc.extend(pc.fw, function () {
             options: {
                 min: 0
             },
+            filter: {
+                type: ['point', 'spot']
+            }
+        }, {
+            name: "falloffMode",
+            displayName: "Falloff mode",
+            description: "Controls the rate at which a light attentuates from its position",
+            type: "enumeration",
+            options: {
+                enumerations: [{
+                    name: 'Linear',
+                    value: pc.LIGHTFALLOFF_LINEAR
+                }, {
+                    name: 'Inverse squared',
+                    value: pc.LIGHTFALLOFF_INVERSESQUARED
+                }]
+            },
+            defaultValue: 0,
             filter: {
                 type: ['point', 'spot']
             }
@@ -127,6 +189,9 @@ pc.extend(pc.fw, function () {
                 type: 'spot'
             }
         }, {
+            name: 'light',
+            exposed: false
+        }, {
             name: 'model',
             exposed: false
         }];
@@ -134,10 +199,10 @@ pc.extend(pc.fw, function () {
         this.exposeProperties();
         this.implementations = {};
         this.on('remove', this.onRemove, this);
-        pc.fw.ComponentSystem.on('toolsUpdate', this.toolsUpdate, this);
+        pc.ComponentSystem.on('toolsUpdate', this.toolsUpdate, this);
     };
 
-    LightComponentSystem = pc.inherits(LightComponentSystem, pc.fw.ComponentSystem);
+    LightComponentSystem = pc.inherits(LightComponentSystem, pc.ComponentSystem);
 
     pc.extend(LightComponentSystem.prototype, {
         initializeComponentData: function (component, data, properties) {
@@ -159,7 +224,7 @@ pc.extend(pc.fw, function () {
             var implementation = this._createImplementation(data.type);
             implementation.initialize(component, data);
 
-            properties = ['type', 'model', 'enabled', 'color', 'intensity', 'range', 'innerConeAngle', 'outerConeAngle', 'castShadows', 'shadowResolution'];
+            properties = ['type', 'light', 'model', 'enabled', 'color', 'intensity', 'range', 'falloffMode', 'innerConeAngle', 'outerConeAngle', 'castShadows', 'shadowDistance', 'shadowResolution', 'shadowBias', 'normalOffsetBias'];
             LightComponentSystem._super.initializeComponentData.call(this, component, data, properties);
         },
 
@@ -191,17 +256,23 @@ pc.extend(pc.fw, function () {
         },
 
         cloneComponent: function (entity, clone) {
+            var light = entity.light;
+
             // create new data block for clone
             var data = {
-                type: entity.light.type,
-                enabled: entity.light.enabled,
-                color: [entity.light.color.r, entity.light.color.g, entity.light.color.b],
-                intensity: entity.light.intensity,
-                range: entity.light.range,
-                innerConeAngle: entity.light.innerConeAngle,
-                outerConeAngle: entity.light.outerConeAngle,
-                castShadows: entity.light.castShadows,
-                shadowResolution: entity.light.shadowResolution
+                type: light.type,
+                enabled: light.enabled,
+                color: [light.color.r, light.color.g, light.color.b],
+                intensity: light.intensity,
+                range: light.range,
+                innerConeAngle: light.innerConeAngle,
+                outerConeAngle: light.outerConeAngle,
+                castShadows: light.castShadows,
+                shadowDistance: light.shadowDistance,
+                shadowResolution: light.shadowResolution,
+                falloffMode: light.falloffMode,
+                shadowBias: light.shadowBias,
+                normalOffsetBias: light.normalOffsetBias
             };
 
             this.addComponent(clone, data);
@@ -237,43 +308,40 @@ pc.extend(pc.fw, function () {
 
     LightComponentImplementation.prototype = {
         initialize: function (component, data) {
-            var node = this._createLightNode(component, data);
-            this._createDebugShape(component, data, node);
-        },
+            var light = new pc.Light();
+            light.setType(this._getLightType());
+            light._node = component.entity;
 
-        _createLightNode: function (component, data) {
-            var node = new pc.scene.LightNode();
-            node.setName(data.type + "light");
-            node.setType(this._getLightType());
-            return node;
+            var app = this.system.app;
+            app.scene.addLight(light);
+
+            this._createDebugShape(component, data, light);
         },
 
         _getLightType: function () {
             return undefined;
         },
 
-        _createDebugShape: function (component, data, node) {
-            var context = this.system.context;
+        _createDebugShape: function (component, data, light) {
+            var app = this.system.app;
 
-            var model = new pc.scene.Model();
-            model.graph = node;
-            model.lights = [ node ];
+            data = data || {};
+            data.light = light;
 
-            if (context.designer) {
+            if (app.designer) {
                 this.mesh = this._createDebugMesh();
-
                 if (!this.material) {
                     this.material = this._createDebugMaterial();
                 }
 
-                model.meshInstances = [ new pc.scene.MeshInstance(node, this.mesh, this.material) ];
+                var model = new pc.Model();
+                model.graph = component.entity;
+                model.meshInstances = [ new pc.MeshInstance(component.entity, this.mesh, this.material) ];
+
+                app.scene.addModel(model);
+
+                data.model = model;
             }
-
-            context.scene.addModel(model);
-            component.entity.addChild(node);
-
-            data = data || {};
-            data.model = model;
         },
 
         _createDebugMesh: function () {
@@ -285,10 +353,17 @@ pc.extend(pc.fw, function () {
         },
 
         remove: function(entity, data) {
-            var context = this.system.context;
-            entity.removeChild(data.model.graph);
-            context.scene.removeModel(data.model);
+            var app = this.system.app;
+
+            app.scene.removeModel(data.model);
             delete data.model;
+
+            app.scene.removeLight(data.light);
+
+            if (app.designer) {
+                app.scene.removeModel(data.model);
+                delete data.model;
+            }
         },
 
         toolsUpdate: function (data) {
@@ -304,7 +379,7 @@ pc.extend(pc.fw, function () {
     DirectionalLightImplementation = pc.inherits(DirectionalLightImplementation, LightComponentImplementation);
     DirectionalLightImplementation.prototype = pc.extend(DirectionalLightImplementation.prototype, {
         _getLightType: function() {
-            return pc.scene.LIGHTTYPE_DIRECTIONAL;
+            return pc.LIGHTTYPE_DIRECTIONAL;
         },
 
         _createDebugMesh: function () {
@@ -312,9 +387,9 @@ pc.extend(pc.fw, function () {
                 return this.mesh;
             }
 
-            var context = this.system.context;
-            var format = new pc.gfx.VertexFormat(context.graphicsDevice, [
-                { semantic: pc.gfx.SEMANTIC_POSITION, components: 3, type: pc.gfx.ELEMENTTYPE_FLOAT32 }
+            var app = this.system.app;
+            var format = new pc.VertexFormat(app.graphicsDevice, [
+                { semantic: pc.SEMANTIC_POSITION, components: 3, type: pc.ELEMENTTYPE_FLOAT32 }
             ]);
 
             // Generate the directional light arrow vertex data
@@ -345,16 +420,16 @@ pc.extend(pc.fw, function () {
                 vertexData[(i+24)*3+2] = posRot[2];
             }
             // Copy vertex data into the vertex buffer
-            var vertexBuffer = new pc.gfx.VertexBuffer(context.graphicsDevice, format, 32);
+            var vertexBuffer = new pc.VertexBuffer(app.graphicsDevice, format, 32);
             var positions = new Float32Array(vertexBuffer.lock());
             for (i = 0; i < vertexData.length; i++) {
                 positions[i] = vertexData[i];
             }
             vertexBuffer.unlock();
-            var mesh = new pc.scene.Mesh();
+            var mesh = new pc.Mesh();
             mesh.vertexBuffer = vertexBuffer;
             mesh.indexBuffer[0] = null;
-            mesh.primitive[0].type = pc.gfx.PRIMITIVE_LINES;
+            mesh.primitive[0].type = pc.PRIMITIVE_LINES;
             mesh.primitive[0].base = 0;
             mesh.primitive[0].count = vertexBuffer.getNumVertices();
             mesh.primitive[0].indexed = false;
@@ -362,7 +437,7 @@ pc.extend(pc.fw, function () {
         },
 
         _createDebugMaterial: function () {
-            var material = new pc.scene.BasicMaterial();
+            var material = new pc.BasicMaterial();
             material.color = new pc.Color(1, 1, 0, 1);
             material.update();
             return material;
@@ -378,7 +453,7 @@ pc.extend(pc.fw, function () {
     PointLightImplementation = pc.inherits(PointLightImplementation, LightComponentImplementation);
     PointLightImplementation.prototype = pc.extend(PointLightImplementation.prototype, {
         _getLightType: function() {
-            return pc.scene.LIGHTTYPE_POINT;
+            return pc.LIGHTTYPE_POINT;
         },
 
         _createDebugMesh: function () {
@@ -386,14 +461,14 @@ pc.extend(pc.fw, function () {
                 return this.mesh;
             }
 
-            var context = this.system.context;
-            return pc.scene.procedural.createSphere(context.graphicsDevice, {
+            var app = this.system.app;
+            return pc.createSphere(app.graphicsDevice, {
                 radius: 0.1
             });
         },
 
         _createDebugMaterial: function () {
-            var material = new pc.scene.BasicMaterial();
+            var material = new pc.BasicMaterial();
             material.color = new pc.Color(1, 1, 0, 1);
             material.update();
             return material;
@@ -410,14 +485,14 @@ pc.extend(pc.fw, function () {
     SpotLightImplementation = pc.inherits(SpotLightImplementation, LightComponentImplementation);
     SpotLightImplementation.prototype = pc.extend(SpotLightImplementation.prototype, {
         _getLightType: function() {
-            return pc.scene.LIGHTTYPE_SPOT;
+            return pc.LIGHTTYPE_SPOT;
         },
 
         _createDebugMesh: function () {
-            var context = this.system.context;
+            var app = this.system.app;
             var indexBuffer = this.indexBuffer;
             if (!indexBuffer) {
-                var indexBuffer = new pc.gfx.IndexBuffer(context.graphicsDevice, pc.gfx.INDEXFORMAT_UINT8, 88);
+                var indexBuffer = new pc.IndexBuffer(app.graphicsDevice, pc.INDEXFORMAT_UINT8, 88);
                 var inds = new Uint8Array(indexBuffer.lock());
                 // Spot cone side lines
                 inds[0] = 0;
@@ -437,16 +512,16 @@ pc.extend(pc.fw, function () {
                 this.indexBuffer = indexBuffer;
             }
 
-            var vertexFormat = new pc.gfx.VertexFormat(context.graphicsDevice, [
-                { semantic: pc.gfx.SEMANTIC_POSITION, components: 3, type: pc.gfx.ELEMENTTYPE_FLOAT32 }
+            var vertexFormat = new pc.VertexFormat(app.graphicsDevice, [
+                { semantic: pc.SEMANTIC_POSITION, components: 3, type: pc.ELEMENTTYPE_FLOAT32 }
             ]);
 
-            var vertexBuffer = new pc.gfx.VertexBuffer(context.graphicsDevice, vertexFormat, 42, pc.gfx.BUFFER_DYNAMIC);
+            var vertexBuffer = new pc.VertexBuffer(app.graphicsDevice, vertexFormat, 42, pc.BUFFER_DYNAMIC);
 
-            var mesh = new pc.scene.Mesh();
+            var mesh = new pc.Mesh();
             mesh.vertexBuffer = vertexBuffer;
             mesh.indexBuffer[0] = indexBuffer;
-            mesh.primitive[0].type = pc.gfx.PRIMITIVE_LINES;
+            mesh.primitive[0].type = pc.PRIMITIVE_LINES;
             mesh.primitive[0].base = 0;
             mesh.primitive[0].count = indexBuffer.getNumIndices();
             mesh.primitive[0].indexed = true;
@@ -456,7 +531,7 @@ pc.extend(pc.fw, function () {
         },
 
         _createDebugMaterial: function () {
-            return new pc.scene.BasicMaterial();
+            return new pc.BasicMaterial();
         },
 
         toolsUpdate: function (data) {

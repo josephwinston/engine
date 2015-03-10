@@ -1,4 +1,4 @@
-    pc.extend(pc.resources, function () {
+pc.extend(pc.resources, function () {
     /**
     * @name pc.resources.ResourceLoader
     * @constructor Create a new instance of a ResourceLoader
@@ -16,7 +16,7 @@
     * });
     */
     var ResourceLoader = function () {
-        if (typeof(window.RSVP) === 'undefined') {
+        if (window.RSVP === undefined) {
             logERROR('Missing RSVP library');
         }
 
@@ -200,6 +200,20 @@
 
         /**
         * @function
+        * @name pc.resources.ResourceLoader#unregisterHash
+        * @description Unregister existing connection between a file hash and an identifier.
+        * @param {String} identifier The resource identifier
+        */
+        unregisterHash: function (identifier) {
+            var hash = this.getHash(identifier);
+            if (hash) {
+                delete this._canonicals[hash];
+                delete this._hashes[identifier];
+            }
+        },
+
+        /**
+        * @function
         * @name pc.resources.ResourceLoader#getHash
         * @description Return the hash registered against the identifier
         * @param {String} identifier The identifier of a resource
@@ -250,7 +264,7 @@
         removeFromCache: function (identifier) {
             var hash = this.getHash(identifier);
             if (hash) {
-                delete this._cache[hash]
+                delete this._cache[hash];
             } else {
                 return null;
             }

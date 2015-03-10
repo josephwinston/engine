@@ -1,14 +1,13 @@
-pc.extend(pc.scene, function () {
+pc.extend(pc, function () {
     /**
-     * @name pc.scene.GraphNode
+     * @name pc.GraphNode
      * @class A hierarchical scene node.
-     * @param {String} name Non-unique, human readable name.
      * @property {pc.Vec3} right Vector representing the X direction of the node in world space (read only).
      * @property {pc.Vec3} up Vector representing the Y direction of the node in world space (read only).
      * @property {pc.Vec3} forward Vector representing the negative Z direction of the node in world space (read only).
      */
-    var GraphNode = function GraphNode(name) {
-        this.name = name || "Untitled"; // Non-unique human readable name
+    var GraphNode = function GraphNode() {
+        this.name = "Untitled"; // Non-unique human readable name
         this._labels = {};
 
         // Local-space properties of transform (only first 3 are settable by the user)
@@ -143,20 +142,20 @@ pc.extend(pc.scene, function () {
         },
 
         clone: function () {
-            var clone = new pc.scene.GraphNode();
+            var clone = new pc.GraphNode();
             this._cloneInternal(clone);
             return clone;
         },
 
         /**
          * @function
-         * @name pc.scene.GraphNode#find
+         * @name pc.GraphNode#find
          * @description Search the graph for nodes using a supplied property or method name to get the value to search on.
          * @param {String} attr The attribute name on the node to search for, if this corresponds to a function name then the function return value is used in the comparison
          * @param {String} value The value of the attr to look for
          * @returns {Array} An array of GraphNodes
          * @example
-         * var graph = ... // Get a pc.fw.Entity hierarchy from somewhere
+         * var graph = ... // Get a pc.Entity hierarchy from somewhere
          * var results = graph.find("getGuid", "1234");
          */
         find: function (attr, value) {
@@ -185,12 +184,12 @@ pc.extend(pc.scene, function () {
 
         /**
          * @function
-         * @name pc.scene.GraphNode#findOne
-         * @description @see pc.scene.GraphNode#find, but this will only return the first graph node
+         * @name pc.GraphNode#findOne
+         * @description @see pc.GraphNode#find, but this will only return the first graph node
          * that it finds.
          * @param {String} attr The property or function name to search using.
          * @param {String} value The value to search for.
-         * @returns {pc.scene.GraphNode} A single graph node.
+         * @returns {pc.GraphNode} A single graph node.
          */
         findOne: function(attr, value) {
             var i;
@@ -221,10 +220,10 @@ pc.extend(pc.scene, function () {
 
         /**
          * @function
-         * @name pc.scene.GraphNode#findByName
+         * @name pc.GraphNode#findByName
          * @description Get the first node found in the graph with the name. The search
          * is depth first.
-         * @returns {pc.scene.GraphNode} The first node to be found matching the supplied name.
+         * @returns {pc.GraphNode} The first node to be found matching the supplied name.
          */
         findByName: function (name) {
             if (this.name === name) return this;
@@ -238,10 +237,10 @@ pc.extend(pc.scene, function () {
 
         /**
          * @function
-         * @name  pc.scene.GraphNode#findByPath
+         * @name  pc.GraphNode#findByPath
          * @description Get the first node found in the graph by its full path in the graph.
          * The full path has this form 'parent/child/sub-child'. The search is depth first.
-         * @returns {pc.scene.GraphNode} The first node to be found matching the supplied path.
+         * @returns {pc.GraphNode} The first node to be found matching the supplied path.
          * @example
          * var path = this.entity.findByPath('child/another_child');
          */
@@ -274,7 +273,7 @@ pc.extend(pc.scene, function () {
 
         /**
          * @function
-         * @name  pc.scene.GraphNode#getPath
+         * @name  pc.GraphNode#getPath
          * @description Gets the path of the entity relative to the root of the hierarchy
          * @return {String} The path
          * @example
@@ -300,9 +299,9 @@ pc.extend(pc.scene, function () {
 
         /**
          * @function
-         * @name pc.scene.GraphNode#getRoot
+         * @name pc.GraphNode#getRoot
          * @description Get the highest ancestor node from this graph node.
-         * @return {pc.scene.GraphNode} The root node of the hierarchy to which this node belongs.
+         * @return {pc.GraphNode} The root node of the hierarchy to which this node belongs.
          * @example
          * var root = this.entity.getRoot();
          */
@@ -321,9 +320,9 @@ pc.extend(pc.scene, function () {
 
         /**
          * @function
-         * @name pc.scene.GraphNode#getParent
+         * @name pc.GraphNode#getParent
          * @description Get the parent GraphNode
-         * @returns {pc.scene.GraphNode} The parent node
+         * @returns {pc.GraphNode} The parent node
          * @example
          * var parent = this.entity.getParent();
          */
@@ -333,7 +332,7 @@ pc.extend(pc.scene, function () {
 
         /**
          * @function
-         * @name pc.scene.GraphNode#getChildren
+         * @name pc.GraphNode#getChildren
          * @description Get the children of this graph node.
          * @returns {Array} The child array of this node.
          * @example
@@ -348,11 +347,11 @@ pc.extend(pc.scene, function () {
 
         /**
          * @function
-         * @name pc.scene.GraphNode#getEulerAngles
+         * @name pc.GraphNode#getEulerAngles
          * @description Get the world space rotation for the specified GraphNode in Euler angle
          * form. The order of the returned Euler angles is XYZ. The value returned by this function
          * should be considered read-only. In order to set the world-space rotation of the graph
-         * node, use {@link pc.scene.GraphNode#setEulerAngles}.
+         * node, use {@link pc.GraphNode#setEulerAngles}.
          * @returns {pc.Vec3} The world space rotation of the graph node in Euler angle form.
          * @example
          * var angles = this.entity.getEulerAngles(); // [0,0,0]
@@ -366,11 +365,11 @@ pc.extend(pc.scene, function () {
 
         /**
          * @function
-         * @name pc.scene.GraphNode#getLocalEulerAngles
+         * @name pc.GraphNode#getLocalEulerAngles
          * @description Get the rotation in local space for the specified GraphNode. The rotation
          * is returned as eurler angles in a 3-dimensional vector where the order is XYZ. The
          * returned vector should be considered read-only. To update the local rotation, use
-         * {@link pc.scene.GraphNode#setLocalEulerAngles}.
+         * {@link pc.GraphNode#setLocalEulerAngles}.
          * @returns {pc.Vec3} The local space rotation of the graph node as euler angles in XYZ order.
          * @example
          * var angles = this.entity.getLocalEulerAngles();
@@ -384,10 +383,10 @@ pc.extend(pc.scene, function () {
 
         /**
          * @function
-         * @name pc.scene.GraphNode#getLocalPosition
+         * @name pc.GraphNode#getLocalPosition
          * @description Get the position in local space for the specified GraphNode. The position
          * is returned as a 3-dimensional vector. The returned vector should be considered read-only.
-         * To update the local position, use {@link pc.scene.GraphNode#setLocalPosition}.
+         * To update the local position, use {@link pc.GraphNode#setLocalPosition}.
          * @returns {pc.Vec3} The local space position of the graph node.
          * @example
          * var position = this.entity.getLocalPosition();
@@ -400,10 +399,10 @@ pc.extend(pc.scene, function () {
 
         /**
          * @function
-         * @name pc.scene.GraphNode#getLocalRotation
+         * @name pc.GraphNode#getLocalRotation
          * @description Get the rotation in local space for the specified GraphNode. The rotation
          * is returned as a quaternion. The returned quaternion should be considered read-only.
-         * To update the local rotation, use {@link pc.scene.GraphNode#setLocalRotation}.
+         * To update the local rotation, use {@link pc.GraphNode#setLocalRotation}.
          * @returns {pc.Quat} The local space rotation of the graph node as a quaternion.
          * @example
          * var rotation = this.entity.getLocalRotation();
@@ -414,10 +413,10 @@ pc.extend(pc.scene, function () {
 
         /**
          * @function
-         * @name pc.scene.GraphNode#getLocalScale
+         * @name pc.GraphNode#getLocalScale
          * @description Get the scale in local space for the specified GraphNode. The scale
          * is returned as a 3-dimensional vector. The returned vector should be considered read-only.
-         * To update the local scale, use {@link pc.scene.GraphNode#setLocalScale}.
+         * To update the local scale, use {@link pc.GraphNode#setLocalScale}.
          * @returns {pc.Vec3} The local space scale of the graph node.
          * @example
          * var scale = this.entity.getLocalScale();
@@ -430,7 +429,7 @@ pc.extend(pc.scene, function () {
 
         /**
          * @function
-         * @name pc.scene.GraphNode#getLocalTransform
+         * @name pc.GraphNode#getLocalTransform
          * @description Get the local transform matrix for this graph node. This matrix
          * is the transform relative to the node's parent's world transformation matrix.
          * @returns {pc.Mat4} The node's local transformation matrix.
@@ -449,7 +448,7 @@ pc.extend(pc.scene, function () {
 
         /**
          * @function
-         * @name pc.scene.GraphNode#getName
+         * @name pc.GraphNode#getName
          * @description Get the human-readable name for this graph node. Note the name
          * is not guaranteed to be unique. For Entities, this is the name that is set in the PlayCanvas Designer.
          * @returns {String} The name of the node.
@@ -464,10 +463,10 @@ pc.extend(pc.scene, function () {
 
         /**
          * @function
-         * @name pc.scene.GraphNode#getPosition
+         * @name pc.GraphNode#getPosition
          * @description Get the world space position for the specified GraphNode. The
          * value returned by this function should be considered read-only. In order to set
-         * the world-space position of the graph node, use {@link pc.scene.GraphNode#setPosition}.
+         * the world-space position of the graph node, use {@link pc.GraphNode#setPosition}.
          * @returns {pc.Vec3} The world space position of the graph node.
          * @example
          * var position = this.entity.getPosition();
@@ -481,10 +480,10 @@ pc.extend(pc.scene, function () {
 
         /**
          * @function
-         * @name pc.scene.GraphNode#getRotation
+         * @name pc.GraphNode#getRotation
          * @description Get the world space rotation for the specified GraphNode in quaternion
          * form. The value returned by this function should be considered read-only. In order
-         * to set the world-space rotation of the graph node, use {@link pc.scene.GraphNode#setRotation}.
+         * to set the world-space rotation of the graph node, use {@link pc.GraphNode#setRotation}.
          * @returns {pc.Quat} The world space rotation of the graph node as a quaternion.
          * @example
          * var rotation = this.entity.getRotation();
@@ -496,7 +495,7 @@ pc.extend(pc.scene, function () {
 
         /**
          * @function
-         * @name pc.scene.GraphNode#getWorldTransform
+         * @name pc.GraphNode#getWorldTransform
          * @description Get the world transformation matrix for this graph node.
          * @returns {pc.Mat4} The node's world transformation matrix.
          * @example
@@ -524,23 +523,28 @@ pc.extend(pc.scene, function () {
 
         /**
          * @function
-         * @name pc.scene.GraphNode#reparent
+         * @name pc.GraphNode#reparent
          * @description Remove graph node from current parent and add as child to new parent
-         * @param {pc.scene.GraphNode} parent New parent to attach graph node to
+         * @param {pc.GraphNode} parent New parent to attach graph node to
+         * @param {Number} index (optional) The child index where the child node should be placed.
          */
-        reparent: function (parent) {
+        reparent: function (parent, index) {
             var current = this.getParent();
             if (current) {
                 current.removeChild(this);
             }
             if (parent) {
-                parent.addChild(this);
+                if (index >= 0) {
+                    parent.insertChild(this, index);
+                } else {
+                    parent.addChild(this);
+                }
             }
         },
 
         /**
          * @function
-         * @name pc.scene.GraphNode#setLocalEulerAngles
+         * @name pc.GraphNode#setLocalEulerAngles
          * @description Sets the local space rotation of the specified graph node using euler angles.
          * Eulers are interpreted in XYZ order. Eulers must be specified in degrees.
          * @param {pc.Vec3} e vector containing euler angles in XYZ order.
@@ -550,7 +554,7 @@ pc.extend(pc.scene, function () {
          */
         /**
          * @function
-         * @name pc.scene.GraphNode#setLocalEulerAngles^2
+         * @name pc.GraphNode#setLocalEulerAngles^2
          * @description Sets the local space rotation of the specified graph node using euler angles.
          * Eulers are interpreted in XYZ order. Eulers must be specified in degrees.
          * @param {Number} x rotation around x-axis in degrees.
@@ -580,7 +584,7 @@ pc.extend(pc.scene, function () {
 
         /**
          * @function
-         * @name pc.scene.GraphNode#setLocalPosition
+         * @name pc.GraphNode#setLocalPosition
          * @description Sets the local space position of the specified graph node.
          * @param {pc.Vec3} pos position vector of graph node in local space.
          * @example
@@ -589,7 +593,7 @@ pc.extend(pc.scene, function () {
          */
         /**
          * @function
-         * @name pc.scene.GraphNode#setLocalPosition^2
+         * @name pc.GraphNode#setLocalPosition^2
          * @description Sets the local space position of the specified graph node.
          * @param {Number} x x-coordinate of local-space position.
          * @param {Number} y y-coordinate of local-space position.
@@ -608,7 +612,7 @@ pc.extend(pc.scene, function () {
 
         /**
          * @function
-         * @name pc.scene.GraphNode#setLocalRotation
+         * @name pc.GraphNode#setLocalRotation
          * @description Sets the local space rotation of the specified graph node.
          * @param {pc.Quat} q quaternion representing rotation of graph node in local space.
          * var q = pc.Quat();
@@ -616,7 +620,7 @@ pc.extend(pc.scene, function () {
          */
         /**
          * @function
-         * @name pc.scene.GraphNode#setLocalRotation^2
+         * @name pc.GraphNode#setLocalRotation^2
          * @description Sets the local space rotation of the specified graph node.
          * @param {Number} x X component of local space quaternion rotation.
          * @param {Number} y Y component of local space quaternion rotation.
@@ -637,7 +641,7 @@ pc.extend(pc.scene, function () {
 
         /**
          * @function
-         * @name pc.scene.GraphNode#setLocalScale
+         * @name pc.GraphNode#setLocalScale
          * @description Sets the local space scale factor of the specified graph node.
          * @param {pc.Vec3} scale xyz-scale of graph node in local space.
          * @example
@@ -646,7 +650,7 @@ pc.extend(pc.scene, function () {
          */
         /**
          * @function
-         * @name pc.scene.GraphNode#setLocalScale^2
+         * @name pc.GraphNode#setLocalScale^2
          * @description Sets the local space scale factor of the specified graph node.
          * @param {Number} x x-coordinate of local-space scale.
          * @param {Number} y y-coordinate of local-space scale.
@@ -665,7 +669,7 @@ pc.extend(pc.scene, function () {
 
         /**
          * @function
-         * @name pc.scene.GraphNode#setName
+         * @name pc.GraphNode#setName
          * @description Sets the non-unique name for this graph node.
          * @param {String} name The name for the node.
          * @example
@@ -677,7 +681,7 @@ pc.extend(pc.scene, function () {
 
         /**
          * @function
-         * @name pc.scene.GraphNode#setPosition
+         * @name pc.GraphNode#setPosition
          * @description Sets the world space position of the specified graph node.
          * @param {pc.Vec3} position world space position (xyz) of graph node.
          * @example
@@ -686,7 +690,7 @@ pc.extend(pc.scene, function () {
          */
         /**
          * @function
-         * @name pc.scene.GraphNode#setPosition^2
+         * @name pc.GraphNode#setPosition^2
          * @description Sets the world space position of the specified graph node.
          * @param {Number} x x-coordinate of world-space position.
          * @param {Number} y y-coordinate of world-space position.
@@ -717,7 +721,7 @@ pc.extend(pc.scene, function () {
 
         /**
          * @function
-         * @name pc.scene.GraphNode#setRotation
+         * @name pc.GraphNode#setRotation
          * @description Sets the world space rotation of the specified graph node using
          * a quaternion.
          * @param {pc.Quat} rot World space rotation (xyz) of graph node.
@@ -727,7 +731,7 @@ pc.extend(pc.scene, function () {
          */
         /**
          * @function
-         * @name pc.scene.GraphNode#setRotation^2
+         * @name pc.GraphNode#setRotation^2
          * @description Sets the world space rotation of the specified graph node using
          * the 4 components of a quaternion.
          * @param {Number} x X component of world space quaternion rotation.
@@ -761,7 +765,7 @@ pc.extend(pc.scene, function () {
 
         /**
          * @function
-         * @name pc.scene.GraphNode#setEulerAngles
+         * @name pc.GraphNode#setEulerAngles
          * @description Sets the world space orientation of the specified graph node
          * using Euler angles. Angles are specified in degress in XYZ order.
          * @param {pc.Vec3} angles Euler angles in degrees (XYZ order).
@@ -771,7 +775,7 @@ pc.extend(pc.scene, function () {
          */
         /**
          * @function
-         * @name pc.scene.GraphNode#setEulerAngles^2
+         * @name pc.GraphNode#setEulerAngles^2
          * @description Sets the world space orientation of the specified graph node
          * using Euler angles. Angles are specified in degress in XYZ order.
          * @param {Number} ex Rotation around world space X axis in degrees.
@@ -811,11 +815,11 @@ pc.extend(pc.scene, function () {
 
         /**
          * @function
-         * @name pc.scene.GraphNode#addChild
+         * @name pc.GraphNode#addChild
          * @description Add a new child to the child list and update the parent value of the child node
-         * @param {pc.scene.GraphNode} node The new child to add
+         * @param {pc.GraphNode} node The new child to add
          * @example
-         * var e = new pc.fw.Entity();
+         * var e = new pc.Entity(app);
          * this.entity.addChild(e);
          */
         addChild: function (node) {
@@ -824,6 +828,51 @@ pc.extend(pc.scene, function () {
             }
 
             this._children.push(node);
+            this._onInsertChild(node);
+        },
+
+        addChildAndSaveTransform: function(node) {
+            var wPos = node.getPosition();
+            var wRot = node.getRotation();
+
+            var current = node.getParent();
+            if (current) {
+                current.removeChild(node);
+            }
+
+            if (this.tmpMat4 == undefined) {
+                this.tmpMat4 = new pc.Mat4();
+                this.tmpQuat = new pc.Quat();
+            }
+
+            node.setPosition(this.tmpMat4.copy(this.worldTransform).invert().transformPoint(wPos));
+            node.setRotation(this.tmpQuat.copy(this.getRotation()).invert().mul(wRot));
+
+            this._children.push(node);
+
+            this._onInsertChild(node);
+        },
+
+        /**
+         * @function
+         * @name pc.GraphNode#insertChild
+         * @description Insert a new child to the child list at the specified index and update the parent value of the child node
+         * @param {pc.GraphNode} node The new child to insert
+         * @param {Number} index The index in the child list of the parent where the new node will be inserted
+         * @example
+         * var e = new pc.Entity(app);
+         * this.entity.insertChild(e, 1);
+         */
+        insertChild: function (node, index) {
+            if (node.getParent() !== null) {
+                throw new Error("GraphNode is already parented");
+            }
+
+            this._children.splice(index, 0, node);
+            this._onInsertChild(node);
+        },
+
+        _onInsertChild: function (node) {
             node._parent = this;
 
             // the child node should be enabled in the hierarchy only if itself is enabled and if
@@ -845,9 +894,9 @@ pc.extend(pc.scene, function () {
 
         /**
          * @function
-         * @name pc.scene.GraphNode#removeChild
+         * @name pc.GraphNode#removeChild
          * @description Remove the node from the child list and update the parent value of the child.
-         * @param {pc.scene.GraphNode} node The node to remove
+         * @param {pc.GraphNode} node The node to remove
          * @example
          * var child = this.entity.getChildren()[0];
          * this.entity.removeChild(child);
@@ -870,7 +919,7 @@ pc.extend(pc.scene, function () {
 
         /**
          * @function
-         * @name pc.scene.GraphNode#addLabel
+         * @name pc.GraphNode#addLabel
          * @description Add a string label to this graph node, labels can be used to group
          * and filter nodes. For example, the 'enemies' label could be applied to a group of NPCs
          * who are enemies.
@@ -882,7 +931,7 @@ pc.extend(pc.scene, function () {
 
         /**
          * @function
-         * @name pc.scene.GraphNode#getLabels
+         * @name pc.GraphNode#getLabels
          * @description Get an array of all labels applied to this graph node.
          * @returns {Array} An array of all labels.
          */
@@ -892,7 +941,7 @@ pc.extend(pc.scene, function () {
 
         /**
          * @function
-         * @name pc.scene.GraphNode#hasLabel
+         * @name pc.GraphNode#hasLabel
          * @description Test if a label has been applied to this graph node.
          * @param {String} label The label to test for.
          * @returns {Boolean} True if the label has been added to this GraphNode.
@@ -904,7 +953,7 @@ pc.extend(pc.scene, function () {
 
         /**
          * @function
-         * @name pc.scene.GraphNode#removeLabel
+         * @name pc.GraphNode#removeLabel
          * @description Remove label from this graph node.
          * @param {String} label The label to remove from this node.
          */
@@ -914,7 +963,7 @@ pc.extend(pc.scene, function () {
 
         /**
          * @function
-         * @name pc.scene.GraphNode#findByLabel
+         * @name pc.GraphNode#findByLabel
          * @description Find all graph nodes from the root and all descendants with the label.
          * @param {String} label The label to search for.
          * @param {Array} results An array to store the results in.
@@ -960,7 +1009,7 @@ pc.extend(pc.scene, function () {
 
         /**
          * @function
-         * @name pc.scene.GraphNode#syncHierarchy
+         * @name pc.GraphNode#syncHierarchy
          * @description Updates the world transformation matrices at this node and all of its descendants.
          */
         syncHierarchy: (function () {
@@ -985,7 +1034,7 @@ pc.extend(pc.scene, function () {
 
         /**
          * @function
-         * @name pc.scene.GraphNode#lookAt
+         * @name pc.GraphNode#lookAt
          * @description Reorients the graph node so that the negative z axis points towards the target.
          * @param {pc.Vec3} target The world space coordinate to 'look at'.
          * @param {pc.Vec3} [up] The up vector for the look at transform. If left unspecified,
@@ -1001,7 +1050,7 @@ pc.extend(pc.scene, function () {
          */
         /**
          * @function
-         * @name pc.scene.GraphNode#lookAt^2
+         * @name pc.GraphNode#lookAt^2
          * @description Reorients the graph node so that the negative z axis points towards the target.
          * @param {Number} tx X-component of the world space coordinate to 'look at'.
          * @param {Number} ty Y-component of the world space coordinate to 'look at'.
@@ -1052,7 +1101,7 @@ pc.extend(pc.scene, function () {
 
         /**
          * @function
-         * @name pc.scene.GraphNode#translate
+         * @name pc.GraphNode#translate
          * @description Translates the graph node in world space by the specified translation vector.
          * @param {pc.Vec3} translation The world space translation vector to apply.
          * @example
@@ -1061,7 +1110,7 @@ pc.extend(pc.scene, function () {
          */
         /**
          * @function
-         * @name pc.scene.GraphNode#translate^2
+         * @name pc.GraphNode#translate^2
          * @description Translates the graph node in world space by the specified translation vector.
          * @param {Number} x x-component of the translation vector.
          * @param {Number} y y-component of the translation vector.
@@ -1089,7 +1138,7 @@ pc.extend(pc.scene, function () {
 
         /**
          * @function
-         * @name pc.scene.GraphNode#translateLocal
+         * @name pc.GraphNode#translateLocal
          * @description Translates the graph node in local space by the specified translation vector.
          * @param {pc.Vec3} translation The local space translation vector to apply.
          * @example
@@ -1098,7 +1147,7 @@ pc.extend(pc.scene, function () {
          */
         /**
          * @function
-         * @name pc.scene.GraphNode#translateLocal^2
+         * @name pc.GraphNode#translateLocal^2
          * @description Translates the graph node in local space by the specified translation vector.
          * @param {Number} x x-component of the translation vector.
          * @param {Number} y y-component of the translation vector.
@@ -1127,7 +1176,7 @@ pc.extend(pc.scene, function () {
 
         /**
          * @function
-         * @name pc.scene.GraphNode#rotate
+         * @name pc.GraphNode#rotate
          * @description Rotates the graph node in world space by the specified Euler angles.
          * Eulers are specified in degrees in XYZ order.
          * @param {pc.Vec3} rot World space rotation (xyz) of graph node.
@@ -1137,7 +1186,7 @@ pc.extend(pc.scene, function () {
          */
         /**
          * @function
-         * @name pc.scene.GraphNode#rotate^2
+         * @name pc.GraphNode#rotate^2
          * @description Rotates the graph node in world space by the specified Euler angles.
          * Eulers are specified in degrees in XYZ order.
          * @param {Number} ex Rotation around world space X axis in degrees.
@@ -1184,7 +1233,7 @@ pc.extend(pc.scene, function () {
 
         /**
          * @function
-         * @name pc.scene.GraphNode#rotateLocal
+         * @name pc.GraphNode#rotateLocal
          * @description Rotates the graph node in local space by the specified Euler angles.
          * Eulers are specified in degrees in XYZ order.
          * @param {pc.Vec3} rot Local space rotation (xyz) of graph node.
@@ -1194,7 +1243,7 @@ pc.extend(pc.scene, function () {
          */
         /**
          * @function
-         * @name pc.scene.GraphNode#rotateLocal^2
+         * @name pc.GraphNode#rotateLocal^2
          * @description Rotates the graph node in local space by the specified Euler angles.
          * Eulers are specified in degrees in XYZ order.
          * @param {Number} ex Rotation around local space X axis in degrees.

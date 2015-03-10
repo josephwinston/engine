@@ -1,19 +1,20 @@
-pc.extend(pc.fw, function () {
-    
+pc.extend(pc, function () {
+
     /**
-     * @name pc.fw.SkyboxComponentSystem
+     * @private
+     * @name pc.SkyboxComponentSystem
      * @constructor Create a new SkyboxComponentSystem
      * @class Renders a cube skybox
-     * @param {pc.fw.ApplicationContext} context
-     * @extends pc.fw.ComponentSystem
+     * @param {pc.Application} app The running {pc.Application}
+     * @extends pc.ComponentSystem
      */
-    var SkyboxComponentSystem = function SkyboxComponentSystem (context) {
+    var SkyboxComponentSystem = function SkyboxComponentSystem (app) {
         this.id = 'skybox';
         this.description = "Renders a skybox in the scene.";
-        context.systems.add(this.id, this);
+        app.systems.add(this.id, this);
 
-        this.ComponentType = pc.fw.SkyboxComponent;
-        this.DataType = pc.fw.SkyboxComponentData;
+        this.ComponentType = pc.SkyboxComponent;
+        this.DataType = pc.SkyboxComponentData;
 
         this.schema = [{
             name: "enabled",
@@ -30,7 +31,7 @@ pc.extend(pc.fw, function () {
                     max: 1,
                     type: "texture"
                 },
-                defaultValue: null  
+                defaultValue: null
             }, {
              name: "negx",
              displayName: "NEGX",
@@ -40,7 +41,7 @@ pc.extend(pc.fw, function () {
                     max: 1,
                     type: "texture"
                 },
-                defaultValue: null  
+                defaultValue: null
             }, {
              name: "posy",
              displayName: "POSY",
@@ -50,7 +51,7 @@ pc.extend(pc.fw, function () {
                     max: 1,
                     type: "texture"
                 },
-                defaultValue: null  
+                defaultValue: null
             }, {
              name: "negy",
              displayName: "NEGY",
@@ -60,7 +61,7 @@ pc.extend(pc.fw, function () {
                     max: 1,
                     type: "texture"
                 },
-                defaultValue: null  
+                defaultValue: null
             }, {
              name: "posz",
              displayName: "POSZ",
@@ -70,7 +71,7 @@ pc.extend(pc.fw, function () {
                     max: 1,
                     type: "texture"
                 },
-                defaultValue: null  
+                defaultValue: null
             }, {
              name: "negz",
              displayName: "NEGZ",
@@ -80,7 +81,7 @@ pc.extend(pc.fw, function () {
                     max: 1,
                     type: "texture"
                 },
-                defaultValue: null  
+                defaultValue: null
             }, {
                 name: 'model',
                 exposed: false,
@@ -89,6 +90,9 @@ pc.extend(pc.fw, function () {
                 name: 'assets',
                 exposed: false,
                 readOnly: true
+            }, {
+                name: 'cubemap',
+                exposed: false
             }
         ];
 
@@ -96,17 +100,17 @@ pc.extend(pc.fw, function () {
 
         this.on('remove', this.onRemove, this);
     };
-    SkyboxComponentSystem = pc.inherits(SkyboxComponentSystem, pc.fw.ComponentSystem);
+    SkyboxComponentSystem = pc.inherits(SkyboxComponentSystem, pc.ComponentSystem);
 
     pc.extend(SkyboxComponentSystem.prototype, {
         initializeComponentData: function (component, data, properties) {
-            var properties = ['enabled', 'posx', 'negx', 'posy', 'negy', 'posz', 'negz'];
+            var properties = ['enabled', 'posx', 'negx', 'posy', 'negy', 'posz', 'negz', 'cubemap'];
             SkyboxComponentSystem._super.initializeComponentData.call(this, component, data, properties);
         },
 
         onRemove: function (entity, data) {
             if (data.model) {
-                this.context.scene.removeModel(data.model);
+                this.app.scene.removeModel(data.model);
                 entity.removeChild(data.model.getGraph());
                 data.model = null;
             }

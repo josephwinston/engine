@@ -1,8 +1,9 @@
-pc.gfx.programlib.depthrgba = {
+pc.programlib.depthrgba = {
     generateKey: function (device, options) {
         var key = "depthrgba";
         if (options.skin) key += "_skin";
         if (options.opacityMap) key += "_opam";
+        if (options.point) key += "_pnt";
         return key;
     },
 
@@ -11,27 +12,27 @@ pc.gfx.programlib.depthrgba = {
         // GENERATE ATTRIBUTES //
         /////////////////////////
         var attributes = {
-            vertex_position: pc.gfx.SEMANTIC_POSITION
+            vertex_position: pc.SEMANTIC_POSITION
         }
         if (options.skin) {
-            attributes.vertex_boneWeights = pc.gfx.SEMANTIC_BLENDWEIGHT;
-            attributes.vertex_boneIndices = pc.gfx.SEMANTIC_BLENDINDICES;
+            attributes.vertex_boneWeights = pc.SEMANTIC_BLENDWEIGHT;
+            attributes.vertex_boneIndices = pc.SEMANTIC_BLENDINDICES;
         }
         if (options.opacityMap) {
-            attributes.vertex_texCoord0 = pc.gfx.SEMANTIC_TEXCOORD0;
+            attributes.vertex_texCoord0 = pc.SEMANTIC_TEXCOORD0;
         }
 
         ////////////////////////////
         // GENERATE VERTEX SHADER //
         ////////////////////////////
-        var getSnippet = pc.gfx.programlib.getSnippet;
+        var getSnippet = pc.programlib.getSnippet;
         var code = '';
 
         // VERTEX SHADER DECLARATIONS
+        code += getSnippet(device, 'vs_transform_decl');
+
         if (options.skin) {
-            code += getSnippet(device, 'vs_skin_position_decl');
-        } else {
-            code += getSnippet(device, 'vs_static_position_decl');
+            code += getSnippet(device, 'vs_skin_decl');
         }
 
         if (options.opacityMap) {
@@ -39,22 +40,38 @@ pc.gfx.programlib.depthrgba = {
             code += 'varying vec2 vUv0;\n\n';
         }
 
+        if (options.point) {
+            code += 'varying vec3 worldPos;\n\n';
+        }
+
         // VERTEX SHADER BODY
         code += getSnippet(device, 'common_main_begin');
 
-        // Skinning is performed in world space
+        // SKINNING
         if (options.skin) {
-            code += getSnippet(device, 'vs_skin_position');
+            code += "    mat4 modelMatrix = vertex_boneWeights.x * getBoneMatrix(vertex_boneIndices.x) +\n";
+            code += "                       vertex_boneWeights.y * getBoneMatrix(vertex_boneIndices.y) +\n";
+            code += "                       vertex_boneWeights.z * getBoneMatrix(vertex_boneIndices.z) +\n";
+            code += "                       vertex_boneWeights.w * getBoneMatrix(vertex_boneIndices.w);\n";
         } else {
-            code += getSnippet(device, 'vs_static_position');
+            code += "    mat4 modelMatrix = matrix_model;\n";
         }
+        code += "\n";
+
+        // TRANSFORM
+        code += "    vec4 positionW = modelMatrix * vec4(vertex_position, 1.0);\n";
+        code += "    gl_Position = matrix_viewProjection * positionW;\n\n";
 
         if (options.opacityMap) {
             code += '    vUv0 = vertex_texCoord0;\n';
         }
 
+        if (options.point) {
+            code += '    worldPos = positionW.xyz;\n';
+        }
+
         code += getSnippet(device, 'common_main_end');
-        
+
         var vshader = code;
 
         //////////////////////////////
@@ -65,6 +82,12 @@ pc.gfx.programlib.depthrgba = {
         if (options.opacityMap) {
             code += 'varying vec2 vUv0;\n\n';
             code += 'uniform sampler2D texture_opacityMap;\n\n';
+        }
+
+        if (options.point) {
+            code += 'varying vec3 worldPos;\n\n';
+            code += 'uniform vec3 view_position;\n\n';
+            code += 'uniform float light_radius;\n\n';
         }
 
         // Packing a float in GLSL with multiplication and mod
@@ -86,7 +109,11 @@ pc.gfx.programlib.depthrgba = {
             code += '    if (texture2D(texture_opacityMap, vUv0).r < 0.25) discard;\n\n';
         }
 
-        code += '    gl_FragData[0] = packFloat(gl_FragCoord.z);\n';
+        if (options.point) {
+            code += "   gl_FragData[0] = packFloat(distance(view_position, worldPos) / light_radius);\n"
+        } else {
+            code += '    gl_FragData[0] = packFloat(gl_FragCoord.z);\n';
+        }
 
         code += getSnippet(device, 'common_main_end');
 

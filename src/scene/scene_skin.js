@@ -1,11 +1,29 @@
-pc.extend(pc.scene, function () {
-
-    var Skin = function (ibp, boneNames) {
+pc.extend(pc, function () {
+    /**
+     * @name pc.Skin
+     * @class A skin contains data about the bones in a hierarchy that drive a skinned mesh animation.
+     * Specifically, the skin stores an array of bone names and for each bone, a inverse bind matrix.
+     * These matrices are instrumental in the mathematics of vertex skinning.
+     * @param {pc.GraphicsDevice} graphicsDevice The graphics device used to manage this texture.
+     * @property {Array} ibp The array of inverse bind matrices.
+     * @property {Array} boneNames The array of bone names for the bones referenced by this skin.
+     * @author Will Eastcott
+     */
+    var Skin = function (graphicsDevice, ibp, boneNames) {
         // Constant between clones
+        this.device = graphicsDevice;
         this.inverseBindPose = ibp;
         this.boneNames = boneNames;
     };
 
+    /**
+     * @name pc.SkinInstance
+     * @class A skin instance is responsible for generating the matrix palette that is used to 
+     * skin vertices from object space to world space.
+     * @param {pc.Skin} skin The skin that will provide the inverse bind pose matrices to 
+     * generate the final matrix palette.
+     * @author Will Eastcott
+     */
     var SkinInstance = function (skin) {
         this.skin = skin;
 
@@ -13,7 +31,42 @@ pc.extend(pc.scene, function () {
         this.bones = [];
 
         var numBones = skin.inverseBindPose.length;
-        this.matrixPalette = new Float32Array(numBones * 16);
+
+        var device = skin.device;
+        if (device.supportsBoneTextures) {
+            // Caculate a square texture dimension to hold bone matrices
+            // where a matrix takes up 4 texels:
+            //   RGBA (Row 1), RGBA (Row 2), RGBA (Row 3), RGBA (Row 4)
+            // So:
+            //   8x8   holds: 64 / 4   = Up to 16 bones
+            //   16x16 holds: 256 / 4  = Up to 64 bones
+            //   32x32 holds: 1024 / 4 = Up to 256 bones
+            //   64x64 holds: 4096 / 4 = Up to 1024 bones
+            // Let's assume for now noone will create a hierarchy of more
+            // than 1024 bones!
+            var size;
+            if (numBones > 256)
+                size = 64;
+            else if (numBones > 64)
+                size = 32;
+            else if (numBones > 16)
+                size = 16;
+            else
+                size = 8;
+
+            this.matrixPalette = new Float32Array(size * size * 4);
+            this.boneTexture = new pc.Texture(device, {
+                width: size, 
+                height: size,
+                format: pc.PIXELFORMAT_RGBA32F,
+                autoMipmap: false
+            });
+            this.boneTexture.minFilter = pc.FILTER_NEAREST;
+            this.boneTexture.magFilter = pc.FILTER_NEAREST;
+            this.matrixPalette = this.boneTexture.lock();
+        } else {
+            this.matrixPalette = new Float32Array(numBones * 16);
+        }
     };
 
     SkinInstance.prototype = {
@@ -47,6 +100,12 @@ pc.extend(pc.scene, function () {
                     mp[base + 13] = pe[13];
                     mp[base + 14] = pe[14];
                     mp[base + 15] = pe[15];
+                }
+
+                // TODO: this is a bit strange looking. Change the Texture API to do a reupload
+                if (this.skin.device.supportsBoneTextures) {
+                    this.boneTexture.lock();
+                    this.boneTexture.unlock();
                 }
             }
         }())

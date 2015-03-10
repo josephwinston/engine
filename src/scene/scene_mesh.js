@@ -1,4 +1,4 @@
-pc.extend(pc.scene, function () {
+pc.extend(pc, function () {
     function getKey(layer, blendType, isCommand, materialId) {
         // Key definition:
         // Bit
@@ -14,7 +14,7 @@ pc.extend(pc.scene, function () {
     }
 
     /**
-     * @name pc.scene.Mesh
+     * @name pc.Mesh
      * @class A graphical primitive.
      */
     var Mesh = function () {
@@ -32,12 +32,12 @@ pc.extend(pc.scene, function () {
     };
 
     /**
-     * @name pc.scene.MeshInstance
-     * @class A instance of a pc.scene.Mesh. A single mesh can be referenced by many instances
+     * @name pc.MeshInstance
+     * @class A instance of a pc.Mesh. A single mesh can be referenced by many instances
      * that can have different transforms and materials.
-     * @param {pc.scene.GraphNode} node The graph node defining the transform for this instance.
-     * @param {pc.scene.Mesh} mesh The graphics mesh being instanced.
-     * @param {pc.scene.Material} material The material used to render this instance.
+     * @param {pc.GraphNode} node The graph node defining the transform for this instance.
+     * @param {pc.Mesh} mesh The graphics mesh being instanced.
+     * @param {pc.Material} material The material used to render this instance.
      */
     var MeshInstance = function MeshInstance(node, mesh, material) {
         this.node = node;           // The node that defines the transform of the mesh instance
@@ -45,10 +45,11 @@ pc.extend(pc.scene, function () {
         this.material = material;   // The material with which to render this instance
 
         // Render options
-        this.layer = pc.scene.LAYER_WORLD;
-        this.renderStyle = pc.scene.RENDERSTYLE_SOLID;
+        this.layer = pc.LAYER_WORLD;
+        this.renderStyle = pc.RENDERSTYLE_SOLID;
         this.castShadow = false;
         this.receiveShadow = true;
+        this.drawToDepth = true;
 
         // 64-bit integer key that defines render order of this mesh instance
         this.key = 0;
@@ -60,6 +61,16 @@ pc.extend(pc.scene, function () {
         this.aabb = new pc.shape.Aabb();
         this.normalMatrix = new pc.Mat3();
     };
+
+    Object.defineProperty(MeshInstance.prototype, 'aabb', {
+        get: function () {
+            this._aabb.setFromTransformedAabb(this.mesh.aabb, this.node.worldTransform);
+            return this._aabb;
+        },
+        set: function (aabb) {
+            this._aabb = aabb;
+        }
+    });
 
     Object.defineProperty(MeshInstance.prototype, 'material', {
         get: function () {
@@ -96,7 +107,7 @@ pc.extend(pc.scene, function () {
 
     pc.extend(MeshInstance.prototype, {
         syncAabb: function () {
-            this.aabb.setFromTransformedAabb(this.mesh.aabb, this.node.worldTransform);
+            // Deprecated
         },
 
         updateKey: function () {
@@ -114,5 +125,5 @@ pc.extend(pc.scene, function () {
         Command: Command,
         Mesh: Mesh,
         MeshInstance: MeshInstance
-    }; 
+    };
 }());

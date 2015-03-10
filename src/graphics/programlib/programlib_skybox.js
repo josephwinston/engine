@@ -1,15 +1,16 @@
-pc.gfx.programlib.skybox = {
+pc.programlib.skybox = {
     generateKey: function (device, options) {
-        var key = "skybox";
+        var key = "skybox" + options.rgbm + " " + options.hdr + " " + options.fixSeams + "" + options.toneMapping + "" + options.gamma;
         return key;
     },
 
     createShaderDefinition: function (device, options) {
-        var getSnippet = pc.gfx.programlib.getSnippet;
+        var getSnippet = pc.programlib.getSnippet;
+        var chunks = pc.shaderChunks;
 
         return {
             attributes: {
-                aPosition: pc.gfx.SEMANTIC_POSITION
+                aPosition: pc.SEMANTIC_POSITION
             },
             vshader: [
                 'attribute vec3 aPosition;',
@@ -33,16 +34,11 @@ pc.gfx.programlib.skybox = {
                 '    vViewDir = aPosition;',
                 '}'
             ].join('\n'),
-            fshader: getSnippet(device, 'fs_precision') + [
-                'varying vec3 vViewDir;',
-                '',
-                'uniform samplerCube texture_cubeMap;',
-                '',
-                'void main(void)',
-                '{',
-                '    gl_FragColor = textureCube(texture_cubeMap, vec3(-vViewDir.x, vViewDir.yz));',
-                '}'
-            ].join('\n')
+            fshader: getSnippet(device, 'fs_precision') +
+                (options.fixSeams? chunks.fixCubemapSeamsStretchPS : chunks.fixCubemapSeamsNonePS) +
+                (options.hdr? chunks.defaultGamma + chunks.defaultTonemapping + chunks.rgbmPS +
+                 chunks.skyboxHDRPS.replace(/\$textureCubeSAMPLE/g,
+                    options.rgbm? "textureCubeRGBM" : (options.hdr? "textureCube" : "textureCubeSRGB")) : chunks.skyboxPS)
         }
     }
 };

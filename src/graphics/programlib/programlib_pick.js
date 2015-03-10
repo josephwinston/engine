@@ -1,4 +1,4 @@
-pc.gfx.programlib.pick = {
+pc.programlib.pick = {
     generateKey: function (device, options) {
         var key = "pick";
         if (options.skin) key += "_skin";
@@ -10,35 +10,43 @@ pc.gfx.programlib.pick = {
         // GENERATE ATTRIBUTES //
         /////////////////////////
         var attributes = {
-            vertex_position: pc.gfx.SEMANTIC_POSITION
+            vertex_position: pc.SEMANTIC_POSITION
         }
         if (options.skin) {
-            attributes.vertex_boneWeights = pc.gfx.SEMANTIC_BLENDWEIGHT;
-            attributes.vertex_boneIndices = pc.gfx.SEMANTIC_BLENDINDICES;
+            attributes.vertex_boneWeights = pc.SEMANTIC_BLENDWEIGHT;
+            attributes.vertex_boneIndices = pc.SEMANTIC_BLENDINDICES;
         }
 
         ////////////////////////////
         // GENERATE VERTEX SHADER //
         ////////////////////////////
-        var getSnippet = pc.gfx.programlib.getSnippet;
+        var getSnippet = pc.programlib.getSnippet;
         var code = '';
 
         // VERTEX SHADER DECLARATIONS
+        code += getSnippet(device, 'vs_transform_decl');
+
         if (options.skin) {
-            code += getSnippet(device, 'vs_skin_position_decl');
-        } else {
-            code += getSnippet(device, 'vs_static_position_decl');
+            code += getSnippet(device, 'vs_skin_decl');
         }
 
         // VERTEX SHADER BODY
         code += getSnippet(device, 'common_main_begin');
 
-        // Skinning is performed in world space
+        // SKINNING
         if (options.skin) {
-            code += getSnippet(device, 'vs_skin_position');
+            code += "    mat4 modelMatrix = vertex_boneWeights.x * getBoneMatrix(vertex_boneIndices.x) +\n";
+            code += "                       vertex_boneWeights.y * getBoneMatrix(vertex_boneIndices.y) +\n";
+            code += "                       vertex_boneWeights.z * getBoneMatrix(vertex_boneIndices.z) +\n";
+            code += "                       vertex_boneWeights.w * getBoneMatrix(vertex_boneIndices.w);\n";
         } else {
-            code += getSnippet(device, 'vs_static_position');
+            code += "    mat4 modelMatrix = matrix_model;\n";
         }
+        code += "\n";
+
+        // TRANSFORM
+        code += "    vec4 positionW = modelMatrix * vec4(vertex_position, 1.0);\n";
+        code += "    gl_Position = matrix_viewProjection * positionW;\n\n";
 
         code += getSnippet(device, 'common_main_end');
         

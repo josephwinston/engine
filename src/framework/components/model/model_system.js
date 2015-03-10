@@ -1,19 +1,19 @@
-pc.extend(pc.fw, function () {
+pc.extend(pc, function () {
     /**
-     * @name pc.fw.ModelComponentSystem
+     * @name pc.ModelComponentSystem
      * @constructor Create a new ModelComponentSystem
      * @class Allows an Entity to render a model or a primitive shape like a box,
      * capsule, sphere, cylinder, cone etc.
-     * @param {Object} context
-     * @extends pc.fw.ComponentSystem
+     * @param {Object} app
+     * @extends pc.ComponentSystem
      */
-    var ModelComponentSystem = function ModelComponentSystem (context) {
+    var ModelComponentSystem = function ModelComponentSystem (app) {
         this.id = 'model';
         this.description = "Renders a 3D model at the location of the Entity.";
-        context.systems.add(this.id, this);
+        app.systems.add(this.id, this);
 
-        this.ComponentType = pc.fw.ModelComponent;
-        this.DataType = pc.fw.ModelComponentData;
+        this.ComponentType = pc.ModelComponent;
+        this.DataType = pc.ModelComponentData;
 
         this.schema = [{
             name: "enabled",
@@ -45,6 +45,9 @@ pc.extend(pc.fw, function () {
                 }, {
                     name: 'Cone',
                     value: 'cone'
+                }, {
+                    name: 'Plane',
+                    value: 'plane'
                 }]
             },
             defaultValue: "asset"
@@ -79,7 +82,7 @@ pc.extend(pc.fw, function () {
         }, {
             name: "castShadows",
             displayName: "Cast shadows",
-            description: "Occlude light from shadow casting lights",
+            description: "Occlude light",
             type: "boolean",
             defaultValue: false
         }, {
@@ -98,30 +101,35 @@ pc.extend(pc.fw, function () {
 
         this.exposeProperties();
 
-        var gd = context.graphicsDevice;
-        this.box = pc.scene.procedural.createBox(gd, {
+        var gd = app.graphicsDevice;
+        this.box = pc.createBox(gd, {
             halfExtents: new pc.Vec3(0.5, 0.5, 0.5)
         });
-        this.capsule = pc.scene.procedural.createCapsule(gd, {
+        this.capsule = pc.createCapsule(gd, {
             radius: 0.5,
             height: 2
         });
-        this.sphere = pc.scene.procedural.createSphere(gd, {
+        this.sphere = pc.createSphere(gd, {
             radius: 0.5
         });
-        this.cone = pc.scene.procedural.createCone(gd, {
+        this.cone = pc.createCone(gd, {
             baseRadius: 0.5,
             peakRadius: 0,
             height: 1
         });
-        this.cylinder = pc.scene.procedural.createCylinder(gd, {
+        this.cylinder = pc.createCylinder(gd, {
             radius: 0.5,
             height: 1
         });
+        this.plane = pc.createPlane(gd, {
+            halfExtents: new pc.Vec2(0.5, 0.5),
+            widthSegments: 1,
+            lengthSegments: 1
+        });
 
-        this.defaultMaterial = new pc.scene.PhongMaterial()
+        this.defaultMaterial = new pc.PhongMaterial();
     };
-    ModelComponentSystem = pc.inherits(ModelComponentSystem, pc.fw.ComponentSystem);
+    ModelComponentSystem = pc.inherits(ModelComponentSystem, pc.ComponentSystem);
 
     pc.extend(ModelComponentSystem.prototype, {
         initializeComponentData: function (component, data, properties) {
@@ -137,7 +145,7 @@ pc.extend(pc.fw, function () {
             var data = entity.model.data;
             entity.model.asset = null;
             if (data.type !== 'asset' && data.model) {
-                this.context.scene.removeModel(data.model);
+                this.app.scene.removeModel(data.model);
                 entity.removeChild(data.model.getGraph());
                 data.model = null;
             }

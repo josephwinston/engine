@@ -28,7 +28,7 @@ pc.extend(pc, (function () {
     *
     * Then to create a new object for example a vec3:
     * var myVector = pool.allocate(x, y, z);
-    * 
+    *
     * To free an allocated object:
     * pool.free(myVector);
     */
@@ -36,7 +36,7 @@ pc.extend(pc, (function () {
         this.objects = [];
         this.ctor = constructor;
         this.name = options.name;
-        this.useNew = typeof( options.useNew ) === 'undefined' || options.useNew;
+        this.useNew = options.useNew === undefined || options.useNew;
         this.metrics = options.metrics;
         if (options.metrics) {
             this.total = 0;
@@ -78,7 +78,7 @@ pc.extend(pc, (function () {
                     this.used++;
                 }
             }
-            
+
             return object;
         },
 
@@ -93,7 +93,7 @@ pc.extend(pc, (function () {
                 object.onFree();
             }
 
-            
+
         },
 
         usage: function () {
@@ -101,7 +101,38 @@ pc.extend(pc, (function () {
         }
     };
 
+
+    var AllocatePool = function (constructor, size) {
+        this._constructor = constructor;
+        this._pool = [];
+        this._count = 0;
+
+        this._resize(size);
+    };
+
+    AllocatePool.prototype = {
+        _resize: function (size) {
+            if (size > this._pool.length) {
+                for (var i = this._pool.length; i < size; i++) {
+                    this._pool[i] = new this._constructor();
+                }
+            }
+        },
+
+        allocate: function () {
+            if (this._count >= this._pool.length) {
+                this._resize(this._pool.length*2);
+            }
+            return this._pool[this._count++];
+        },
+
+        freeAll: function () {
+            this._count = 0;
+        }
+    }
+
     return {
+        AllocatePool: AllocatePool,
         ObjectPool: ObjectPool
     };
 

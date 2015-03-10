@@ -1,6 +1,5 @@
-pc.gfx.precalculatedTangents = true;
-
-pc.extend(pc.gfx, function () {
+pc.extend(pc, function () {
+    'use strict';
 
     var EVENT_RESIZE = 'resizecanvas';
 
@@ -26,7 +25,7 @@ pc.extend(pc.gfx, function () {
     };
 
     var _createContext = function (canvas, options) {
-        var names = ["webgl", "experimental-webgl", "webkit-3d", "moz-webgl"];
+        var names = ["webgl", "experimental-webgl"];
         var context = null;
         for (var i = 0; i < names.length; i++) {
             try {
@@ -39,8 +38,41 @@ pc.extend(pc.gfx, function () {
         return context;
     };
 
+    var _downsampleImage = function (image, size) {
+        var srcW = image.width;
+        var srcH = image.height;
+
+        if ((srcW > size) || (srcH > size)) {
+            var scale = size / Math.max(srcW, srcH);
+            var dstW = Math.floor(srcW * scale);
+            var dstH = Math.floor(srcH * scale);
+
+            console.warn('Image dimensions larger than max supported texture size of ' + size + '. ' +
+                         'Resizing from ' + srcW + ', ' + srcH + ' to ' + dstW + ', ' + dstH + '.');
+
+            var canvas = document.createElement('canvas');
+            canvas.width = dstW;
+            canvas.height = dstH;
+
+            var context = canvas.getContext('2d');
+            context.drawImage(image, 0, 0, srcW, srcH, 0, 0, dstW, dstH);
+
+            return canvas;
+        }
+
+        return image;
+    };
+
+    function _isIE() {
+        var ua = window.navigator.userAgent;
+        var msie = ua.indexOf("MSIE ");
+        var trident = navigator.userAgent.match(/Trident.*rv\:11\./);
+
+        return (msie > 0 || !!trident);
+    };
+
     /**
-     * @name pc.gfx.Device
+     * @name pc.GraphicsDevice
      * @class The graphics device manages the underlying graphics context. It is responsible
      * for submitting render state changes and graphics primitives to the hardware. A graphics
      * device is tied to a specific canvas HTML element. It is valid to have more than one
@@ -49,17 +81,20 @@ pc.extend(pc.gfx, function () {
      * @param {Object} canvas The canvas to which the graphics device is tied.
      * @property {Number} width Width of the back buffer in pixels (read-only).
      * @property {Number} height Height of the back buffer in pixels (read-only).
+     * @property {Number} maxAnisotropy The maximum supported texture anisotropy setting (read-only).
+     * @property {Number} maxCubeMapSize The maximum supported dimension of a cube map (read-only).
+     * @property {Number} maxTextureSize The maximum supported dimension of a texture (read-only).
      * is attached is fullscreen or not.
      */
 
      /**
      * @event
-     * @name pc.gfx.Device#resizecanvas
+     * @name pc.GraphicsDevice#resizecanvas
      * @description The 'resizecanvas' event is fired when the canvas is resized
      * @param {Number} width The new width of the canvas in pixels
      * @param {Number} height The new height of the canvas in pixels
     */
-    var Device = function (canvas) {
+    var GraphicsDevice = function (canvas) {
         this.gl = undefined;
         this.canvas = canvas;
         this.shader = null;
@@ -73,14 +108,15 @@ pc.extend(pc.gfx, function () {
         this.commitFunction = {};
 
         if (!window.WebGLRenderingContext) {
-            throw new pc.gfx.UnsupportedBrowserError();
+            throw new pc.UnsupportedBrowserError();
         }
 
         // Retrieve the WebGL context
-        this.gl = _createContext(canvas, {alpha: false});
+        this.gl = _createContext(canvas);
+        var gl = this.gl;
 
         if (!this.gl) {
-            throw new pc.gfx.ContextCreationError();
+            throw new pc.ContextCreationError();
         }
 
         // put the rest of the contructor in a function
@@ -97,24 +133,8 @@ pc.extend(pc.gfx, function () {
             this.vertexBuffers = [];
             this.precision     = 'highp';
 
-            var gl = this.gl;
-            logINFO("Device started");
-            logINFO("WebGL version:                " + gl.getParameter(gl.VERSION));
-            logINFO("WebGL shader version:         " + gl.getParameter(gl.SHADING_LANGUAGE_VERSION));
-            logINFO("WebGL vendor:                 " + gl.getParameter(gl.VENDOR));
-            logINFO("WebGL renderer:               " + gl.getParameter(gl.RENDERER));
-            logINFO("WebGL extensions:             " + gl.getSupportedExtensions());
-            logINFO("WebGL max vertex attribs:     " + gl.getParameter(gl.MAX_VERTEX_ATTRIBS));
-            logINFO("WebGL max vshader vectors:    " + gl.getParameter(gl.MAX_VERTEX_UNIFORM_VECTORS));
-            logINFO("WebGL max varying vectors:    " + gl.getParameter(gl.MAX_VARYING_VECTORS));
-            logINFO("WebGL max fshader vectors:    " + gl.getParameter(gl.MAX_FRAGMENT_UNIFORM_VECTORS));
-
-            logINFO("WebGL max combined tex units: " + gl.getParameter(gl.MAX_COMBINED_TEXTURE_IMAGE_UNITS));
-            logINFO("WebGL max vertex tex units:   " + gl.getParameter(gl.MAX_VERTEX_TEXTURE_IMAGE_UNITS));
-            logINFO("WebGL max tex units:          " + gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS));
-
-            logINFO("WebGL max texture size:       " + gl.getParameter(gl.MAX_TEXTURE_SIZE));
-            logINFO("WebGL max cubemap size:       " + gl.getParameter(gl.MAX_CUBE_MAP_TEXTURE_SIZE));
+            this.maxTextureSize = gl.getParameter(gl.MAX_TEXTURE_SIZE);
+            this.maxCubeMapSize = gl.getParameter(gl.MAX_CUBE_MAP_TEXTURE_SIZE);
 
             // Query the precision supported by ints and floats in vertex and fragment shaders
             var vertexShaderPrecisionHighpFloat = gl.getShaderPrecisionFormat(gl.VERTEX_SHADER, gl.HIGH_FLOAT);
@@ -149,15 +169,13 @@ pc.extend(pc.gfx, function () {
             this.defaultClearOptions = {
                 color: [0, 0, 0, 1],
                 depth: 1,
-                flags: pc.gfx.CLEARFLAG_COLOR | pc.gfx.CLEARFLAG_DEPTH
+                flags: pc.CLEARFLAG_COLOR | pc.CLEARFLAG_DEPTH
             };
 
-            this.glPrimitive = [
-                gl.POINTS,
-                gl.LINES,
-                gl.LINE_STRIP,
-                gl.TRIANGLES,
-                gl.TRIANGLE_STRIP
+            this.glAddress = [
+                gl.REPEAT,
+                gl.CLAMP_TO_EDGE,
+                gl.MIRRORED_REPEAT
             ];
 
             this.glBlendEquation = [
@@ -191,6 +209,25 @@ pc.extend(pc.gfx, function () {
                 gl.STENCIL_BUFFER_BIT | gl.COLOR_BUFFER_BIT | gl.DEPTH_BUFFER_BIT
             ];
 
+            this.glFilter = [
+                gl.NEAREST,
+                gl.LINEAR,
+                gl.NEAREST_MIPMAP_NEAREST,
+                gl.NEAREST_MIPMAP_LINEAR,
+                gl.LINEAR_MIPMAP_NEAREST,
+                gl.LINEAR_MIPMAP_LINEAR
+            ];
+
+            this.glPrimitive = [
+                gl.POINTS,
+                gl.LINES,
+                gl.LINE_LOOP,
+                gl.LINE_STRIP,
+                gl.TRIANGLES,
+                gl.TRIANGLE_STRIP,
+                gl.TRIANGLE_FAN
+            ];
+
             this.glType = [
                 gl.BYTE,
                 gl.UNSIGNED_BYTE,
@@ -203,89 +240,123 @@ pc.extend(pc.gfx, function () {
 
             // Initialize extensions
             this.extTextureFloat = gl.getExtension("OES_texture_float");
+            this.extTextureFloatLinear = gl.getExtension("OES_texture_float_linear");
+            this.extTextureHalfFloat = gl.getExtension("OES_texture_half_float");
+
+            this.maxVertexTextures = gl.getParameter(gl.MAX_VERTEX_TEXTURE_IMAGE_UNITS);
+            this.supportsBoneTextures = this.extTextureFloat && this.maxVertexTextures > 0;
+
+            // Test if we can render to floating-point RGBA texture
+            this.extTextureFloatRenderable = !!this.extTextureFloat;
+            if (this.extTextureFloat) {
+                var __texture = gl.createTexture();
+                gl.bindTexture(gl.TEXTURE_2D, __texture);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+                gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+
+                var __width = 2;
+                var __height = 2;
+                gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, __width, __height, 0, gl.RGBA, gl.FLOAT, null);
+
+                // Try to use this texture as a render target.
+                var __fbo = gl.createFramebuffer();
+                gl.bindFramebuffer(gl.FRAMEBUFFER, __fbo);
+                gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, __texture, 0);
+                gl.bindTexture(gl.TEXTURE_2D, null);
+                // It is legal for a WebGL implementation exposing the OES_texture_float extension to
+                // support floating-point textures but not as attachments to framebuffer objects.
+                if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) != gl.FRAMEBUFFER_COMPLETE) {
+                    this.extTextureFloatRenderable = false;
+                }
+            }
+
+            this.extTextureLod = gl.getExtension('EXT_shader_texture_lod');
+
+            this.fragmentUniformsCount = gl.getParameter(gl.MAX_FRAGMENT_UNIFORM_VECTORS);
+            this.samplerCount = gl.getParameter(gl.MAX_TEXTURE_IMAGE_UNITS);
+
             this.extDepthTexture = null; //gl.getExtension("WEBKIT_WEBGL_depth_texture");
             this.extStandardDerivatives = gl.getExtension("OES_standard_derivatives");
             if (this.extStandardDerivatives) {
                 gl.hint(this.extStandardDerivatives.FRAGMENT_SHADER_DERIVATIVE_HINT_OES, gl.NICEST);
             }
 
-            this.maxTextureMaxAnisotropy = 1;
             this.extTextureFilterAnisotropic = gl.getExtension('EXT_texture_filter_anisotropic');
             if (!this.extTextureFilterAnisotropic) {
                 this.extTextureFilterAnisotropic = gl.getExtension('WEBKIT_EXT_texture_filter_anisotropic');
             }
-            if (this.extTextureFilterAnisotropic) {
-                this.maxTextureMaxAnisotropy = gl.getParameter(this.extTextureFilterAnisotropic.MAX_TEXTURE_MAX_ANISOTROPY_EXT);
+
+            this.extCompressedTextureS3TC = gl.getExtension('WEBGL_compressed_texture_s3tc');
+            if (!this.extCompressedTextureS3TC) {
+                this.extCompressedTextureS3TC = gl.getExtension('WEBKIT_WEBGL_compressed_texture_s3tc');
             }
-            this.extCompressedTextureS3TC = gl.getExtension('WEBKIT_WEBGL_compressed_texture_s3tc');
+
+            if (this.extCompressedTextureS3TC) {
+                if (_isIE()) {
+                    // IE 11 can't use mip maps with S3TC
+                    this.extCompressedTextureS3TC = false;
+                }
+            }
+
             if (this.extCompressedTextureS3TC) {
                 var formats = gl.getParameter(gl.COMPRESSED_TEXTURE_FORMATS);
-                var formatMsg = "WebGL compressed texture formats:";
                 for (var i = 0; i < formats.length; i++) {
                     switch (formats[i]) {
                         case this.extCompressedTextureS3TC.COMPRESSED_RGB_S3TC_DXT1_EXT:
-                            formatMsg += ' COMPRESSED_RGB_S3TC_DXT1_EXT';
                             break;
                         case this.extCompressedTextureS3TC.COMPRESSED_RGBA_S3TC_DXT1_EXT:
-                            formatMsg += ' COMPRESSED_RGBA_S3TC_DXT1_EXT';
                             break;
                         case this.extCompressedTextureS3TC.COMPRESSED_RGBA_S3TC_DXT3_EXT:
-                            formatMsg += ' COMPRESSED_RGBA_S3TC_DXT3_EXT';
                             break;
                         case this.extCompressedTextureS3TC.COMPRESSED_RGBA_S3TC_DXT5_EXT:
-                            formatMsg += ' COMPRESSED_RGBA_S3TC_DXT5_EXT';
                             break;
                         default:
-                            formatMsg += ' UNKOWN(' + formats[i] + ')';
                             break;
                     }
                 }
-                logINFO(formatMsg);
             }
+
             this.extDrawBuffers = gl.getExtension('EXT_draw_buffers');
-            if (this.extDrawBuffers) {
-                logINFO("WebGL max draw buffers:       " + gl.getParameter(this.extDrawBuffers.MAX_DRAW_BUFFERS_EXT));
-                logINFO("WebGL max color attachments:  " + gl.getParameter(this.extDrawBuffers.MAX_COLOR_ATTACHMENTS_EXT));
-            } else {
-                logINFO("WebGL max draw buffers:       " + 1);
-                logINFO("WebGL max color attachments:  " + 1);
-            }
+            this.maxDrawBuffers = this.extDrawBuffers ? gl.getParameter(this.extDrawBuffers.MAX_DRAW_BUFFERS_EXT) : 1;
+            this.maxColorAttachments = this.extDrawBuffers ? gl.getParameter(this.extDrawBuffers.MAX_COLOR_ATTACHMENTS_EXT) : 1;
 
             // Create the default render target
             this.renderTarget = null;
 
             // Create the ScopeNamespace for shader attributes and variables
-            this.scope = new pc.gfx.ScopeSpace("Device");
+            this.scope = new pc.ScopeSpace("Device");
 
             // Define the uniform commit functions
             this.commitFunction = {};
-            this.commitFunction[pc.gfx.ShaderInputType.BOOL ] = function (locationId, value) { gl.uniform1i(locationId, value); };
-            this.commitFunction[pc.gfx.ShaderInputType.INT  ] = function (locationId, value) { gl.uniform1i(locationId, value); };
-            this.commitFunction[pc.gfx.ShaderInputType.FLOAT] = function (locationId, value) {
+            this.commitFunction[pc.UNIFORMTYPE_BOOL ] = function (locationId, value) { gl.uniform1i(locationId, value); };
+            this.commitFunction[pc.UNIFORMTYPE_INT  ] = function (locationId, value) { gl.uniform1i(locationId, value); };
+            this.commitFunction[pc.UNIFORMTYPE_FLOAT] = function (locationId, value) {
                 if (typeof value == "number")
                     gl.uniform1f(locationId, value);
                 else
                     gl.uniform1fv(locationId, value);
                 };
-            this.commitFunction[pc.gfx.ShaderInputType.VEC2 ] = function (locationId, value) { gl.uniform2fv(locationId, value); };
-            this.commitFunction[pc.gfx.ShaderInputType.VEC3 ] = function (locationId, value) { gl.uniform3fv(locationId, value); };
-            this.commitFunction[pc.gfx.ShaderInputType.VEC4 ] = function (locationId, value) { gl.uniform4fv(locationId, value); };
-            this.commitFunction[pc.gfx.ShaderInputType.IVEC2] = function (locationId, value) { gl.uniform2iv(locationId, value); };
-            this.commitFunction[pc.gfx.ShaderInputType.BVEC2] = function (locationId, value) { gl.uniform2iv(locationId, value); };
-            this.commitFunction[pc.gfx.ShaderInputType.IVEC3] = function (locationId, value) { gl.uniform3iv(locationId, value); };
-            this.commitFunction[pc.gfx.ShaderInputType.BVEC3] = function (locationId, value) { gl.uniform3iv(locationId, value); };
-            this.commitFunction[pc.gfx.ShaderInputType.IVEC4] = function (locationId, value) { gl.uniform4iv(locationId, value); };
-            this.commitFunction[pc.gfx.ShaderInputType.BVEC4] = function (locationId, value) { gl.uniform4iv(locationId, value); };
-            this.commitFunction[pc.gfx.ShaderInputType.MAT2 ] = function (locationId, value) { gl.uniformMatrix2fv(locationId, false, value); };
-            this.commitFunction[pc.gfx.ShaderInputType.MAT3 ] = function (locationId, value) { gl.uniformMatrix3fv(locationId, false, value); };
-            this.commitFunction[pc.gfx.ShaderInputType.MAT4 ] = function (locationId, value) { gl.uniformMatrix4fv(locationId, false, value); };
+            this.commitFunction[pc.UNIFORMTYPE_VEC2]  = function (locationId, value) { gl.uniform2fv(locationId, value); };
+            this.commitFunction[pc.UNIFORMTYPE_VEC3]  = function (locationId, value) { gl.uniform3fv(locationId, value); };
+            this.commitFunction[pc.UNIFORMTYPE_VEC4]  = function (locationId, value) { gl.uniform4fv(locationId, value); };
+            this.commitFunction[pc.UNIFORMTYPE_IVEC2] = function (locationId, value) { gl.uniform2iv(locationId, value); };
+            this.commitFunction[pc.UNIFORMTYPE_BVEC2] = function (locationId, value) { gl.uniform2iv(locationId, value); };
+            this.commitFunction[pc.UNIFORMTYPE_IVEC3] = function (locationId, value) { gl.uniform3iv(locationId, value); };
+            this.commitFunction[pc.UNIFORMTYPE_BVEC3] = function (locationId, value) { gl.uniform3iv(locationId, value); };
+            this.commitFunction[pc.UNIFORMTYPE_IVEC4] = function (locationId, value) { gl.uniform4iv(locationId, value); };
+            this.commitFunction[pc.UNIFORMTYPE_BVEC4] = function (locationId, value) { gl.uniform4iv(locationId, value); };
+            this.commitFunction[pc.UNIFORMTYPE_MAT2]  = function (locationId, value) { gl.uniformMatrix2fv(locationId, false, value); };
+            this.commitFunction[pc.UNIFORMTYPE_MAT3]  = function (locationId, value) { gl.uniformMatrix3fv(locationId, false, value); };
+            this.commitFunction[pc.UNIFORMTYPE_MAT4]  = function (locationId, value) { gl.uniformMatrix4fv(locationId, false, value); };
 
             // Set the initial render state
             this.setBlending(false);
-            this.setBlendFunction(pc.gfx.BLENDMODE_ONE, pc.gfx.BLENDMODE_ZERO);
-            this.setBlendEquation(pc.gfx.BLENDEQUATION_ADD);
+            this.setBlendFunction(pc.BLENDMODE_ONE, pc.BLENDMODE_ZERO);
+            this.setBlendEquation(pc.BLENDEQUATION_ADD);
             this.setColorWrite(true, true, true, true);
-            this.setCullMode(pc.gfx.CULLFACE_BACK);
+            this.setCullMode(pc.CULLFACE_BACK);
             this.setDepthTest(true);
             this.setDepthWrite(true);
 
@@ -294,16 +365,16 @@ pc.extend(pc.gfx, function () {
 
             gl.enable(gl.SCISSOR_TEST);
 
-            this.programLib = new pc.gfx.ProgramLibrary(this);
-            for (var generator in pc.gfx.programlib) {
-                this.programLib.register(generator, pc.gfx.programlib[generator]);
+            this.programLib = new pc.ProgramLibrary(this);
+            for (var generator in pc.programlib) {
+                this.programLib.register(generator, pc.programlib[generator]);
             }
 
             // Calculate a estimate of the maximum number of bones that can be uploaded to the GPU
             // based on the number of available uniforms and the number of uniforms required for non-
             // bone data.  This is based off of the Phong shader.  A user defined shader may have
             // even less space available for bones so this calculated value can be overridden via
-            // pc.gfx.Device.setBoneLimit.
+            // pc.GraphicsDevice.setBoneLimit.
             var numUniforms = gl.getParameter(gl.MAX_VERTEX_UNIFORM_VECTORS);
             numUniforms -= 4 * 4; // Model, view, projection and shadow matrices
             numUniforms -= 8;     // 8 lights max, each specifying a position vector
@@ -335,16 +406,13 @@ pc.extend(pc.gfx, function () {
             gl.vertexAttribPointer(0, 4, gl.UNSIGNED_BYTE, false, 4, 0);
             this.supportsUnsignedByte = (gl.getError() === 0);
             gl.deleteBuffer(bufferId);
-
-
         }).call(this);
-
     };
 
-    Device.prototype = {
+    GraphicsDevice.prototype = {
         /**
          * @function
-         * @name pc.gfx.Device#setViewport
+         * @name pc.GraphicsDevice#setViewport
          * @description Set the active rectangle for rendering on the specified device.
          * @param {Number} x The pixel space x-coordinate of the bottom left corner of the viewport.
          * @param {Number} y The pixel space y-coordinate of the bottom left corner of the viewport.
@@ -358,7 +426,7 @@ pc.extend(pc.gfx, function () {
 
         /**
          * @function
-         * @name pc.gfx.Device#setScissor
+         * @name pc.GraphicsDevice#setScissor
          * @description Set the active scissor rectangle on the specified device.
          * @param {Number} x The pixel space x-coordinate of the bottom left corner of the scissor rectangle.
          * @param {Number} y The pixel space y-coordinate of the bottom left corner of the scissor rectangle.
@@ -372,9 +440,9 @@ pc.extend(pc.gfx, function () {
 
         /**
          * @function
-         * @name pc.gfx.Device#getProgramLibrary
+         * @name pc.GraphicsDevice#getProgramLibrary
          * @description Retrieves the program library assigned to the specified graphics device.
-         * @returns {pc.gfx.ProgramLibrary} The program library assigned to the device.
+         * @returns {pc.ProgramLibrary} The program library assigned to the device.
          */
         getProgramLibrary: function () {
             return this.programLib;
@@ -382,12 +450,12 @@ pc.extend(pc.gfx, function () {
 
         /**
          * @function
-         * @name pc.gfx.Device#setProgramLibrary
+         * @name pc.GraphicsDevice#setProgramLibrary
          * @description Assigns a program library to the specified device. By default, a graphics
          * device is created with a program library that manages all of the programs that are
          * used to render any graphical primitives. However, this function allows the user to
          * replace the existing program library with a new one.
-         * @param {pc.gfx.ProgramLibrary} programLib The program library to assign to the device.
+         * @param {pc.ProgramLibrary} programLib The program library to assign to the device.
          */
         setProgramLibrary: function (programLib) {
             this.programLib = programLib;
@@ -395,23 +463,73 @@ pc.extend(pc.gfx, function () {
 
         /**
          * @function
-         * @name pc.gfx.Device#updateBegin
+         * @name pc.GraphicsDevice#updateBegin
          * @description Marks the beginning of a block of rendering. Internally, this function
          * binds the render target currently set on the device. This function should be matched
-         * with a call to pc.gfx.Device#updateEnd. Calls to pc.gfx.Device#updateBegin
-         * and pc.gfx.Device#updateEnd must not be nested.
+         * with a call to pc.GraphicsDevice#updateEnd. Calls to pc.GraphicsDevice#updateBegin
+         * and pc.GraphicsDevice#updateEnd must not be nested.
          */
         updateBegin: function () {
-            logASSERT(this.canvas !== null, "Device has not been started");
+            var gl = this.gl;
 
             this.boundBuffer = null;
             this.indexBuffer = null;
 
             // Set the render target
-            if (this.renderTarget) {
-                this.renderTarget.bind();
+            var target = this.renderTarget;
+            if (target) {
+                // Create a new WebGL frame buffer object
+                if (!target._glFrameBuffer) {
+                    target._glFrameBuffer = gl.createFramebuffer();
+
+                    gl.bindFramebuffer(gl.FRAMEBUFFER, target._glFrameBuffer);
+
+                    if (!target._colorBuffer._glTextureId) {
+                        this.setTexture(target._colorBuffer, 0);
+                    }
+
+                    gl.framebufferTexture2D(gl.FRAMEBUFFER,
+                                            gl.COLOR_ATTACHMENT0,
+                                            target._colorBuffer._cubemap ? gl.TEXTURE_CUBE_MAP_POSITIVE_X + target._face : gl.TEXTURE_2D,
+                                            target._colorBuffer._glTextureId,
+                                            0);
+
+                    if (target._depth) {
+                        if (!target._glDepthBuffer) {
+                            target._glDepthBuffer = gl.createRenderbuffer();
+                        }
+
+                        gl.bindRenderbuffer(gl.RENDERBUFFER, target._glDepthBuffer);
+                        gl.renderbufferStorage(gl.RENDERBUFFER, gl.DEPTH_COMPONENT16, target.width, target.height);
+                        gl.bindRenderbuffer(gl.RENDERBUFFER, null);
+
+                        gl.framebufferRenderbuffer(gl.FRAMEBUFFER, gl.DEPTH_ATTACHMENT, gl.RENDERBUFFER, target._glDepthBuffer);
+                    }
+
+                    // Ensure all is well
+                    var status = gl.checkFramebufferStatus(gl.FRAMEBUFFER);
+                    switch (status) {
+                        case gl.FRAMEBUFFER_INCOMPLETE_ATTACHMENT:
+                            console.error("ERROR: FRAMEBUFFER_INCOMPLETE_ATTACHMENT");
+                            break;
+                        case gl.FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT:
+                            console.error("ERROR: FRAMEBUFFER_INCOMPLETE_MISSING_ATTACHMENT");
+                            break;
+                        case gl.FRAMEBUFFER_INCOMPLETE_DIMENSIONS:
+                            console.error("ERROR: FRAMEBUFFER_INCOMPLETE_DIMENSIONS");
+                            break;
+                        case gl.FRAMEBUFFER_UNSUPPORTED:
+                            console.error("ERROR: FRAMEBUFFER_UNSUPPORTED");
+                            break;
+                        case gl.FRAMEBUFFER_COMPLETE:
+                            break;
+                        default:
+                            break;
+                    }
+                } else {
+                    gl.bindFramebuffer(gl.FRAMEBUFFER, target._glFrameBuffer);
+                }
             } else {
-                var gl = this.gl;
                 gl.bindFramebuffer(gl.FRAMEBUFFER, null);
             }
 
@@ -422,27 +540,275 @@ pc.extend(pc.gfx, function () {
 
         /**
          * @function
-         * @name pc.gfx.Device#updateEnd
+         * @name pc.GraphicsDevice#updateEnd
          * @description Marks the end of a block of rendering. This function should be called
-         * after a matching call to pc.gfx.Device#updateBegin. Calls to pc.gfx.Device#updateBegin
-         * and pc.gfx.Device#updateEnd must not be nested.
+         * after a matching call to pc.GraphicsDevice#updateBegin. Calls to pc.GraphicsDevice#updateBegin
+         * and pc.GraphicsDevice#updateEnd must not be nested.
          */
         updateEnd: function () {
+            var gl = this.gl;
+
+            // Unset the render target
+            var target = this.renderTarget;
+            if (target) {
+                gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+            }
+        },
+
+        initializeTexture: function (texture) {
+            var gl = this.gl;
+
+            texture._glTextureId = gl.createTexture();
+
+            texture._glTarget = texture._cubemap ? gl.TEXTURE_CUBE_MAP : gl.TEXTURE_2D;
+
+            switch (texture._format) {
+                case pc.PIXELFORMAT_A8:
+                    texture._glFormat = gl.ALPHA;
+                    texture._glInternalFormat = gl.ALPHA;
+                    texture._glPixelType = gl.UNSIGNED_BYTE;
+                    break;
+                case pc.PIXELFORMAT_L8:
+                    texture._glFormat = gl.LUMINANCE;
+                    texture._glInternalFormat = gl.LUMINANCE;
+                    texture._glPixelType = gl.UNSIGNED_BYTE;
+                    break;
+                case pc.PIXELFORMAT_L8_A8:
+                    texture._glFormat = gl.LUMINANCE_ALPHA;
+                    texture._glInternalFormat = gl.LUMINANCE_ALPHA;
+                    texture._glPixelType = gl.UNSIGNED_BYTE;
+                    break;
+                case pc.PIXELFORMAT_R5_G6_B5:
+                    texture._glFormat = gl.RGB;
+                    texture._glInternalFormat = gl.RGB;
+                    texture._glPixelType = gl.UNSIGNED_SHORT_5_6_5;
+                    break;
+                case pc.PIXELFORMAT_R5_G5_B5_A1:
+                    texture._glFormat = gl.RGBA;
+                    texture._glInternalFormat = gl.RGBA;
+                    texture._glPixelType = gl.UNSIGNED_SHORT_5_5_5_1;
+                    break;
+                case pc.PIXELFORMAT_R4_G4_B4_A4:
+                    texture._glFormat = gl.RGBA;
+                    texture._glInternalFormat = gl.RGBA;
+                    texture._glPixelType = gl.UNSIGNED_SHORT_4_4_4_4;
+                    break;
+                case pc.PIXELFORMAT_R8_G8_B8:
+                    texture._glFormat = gl.RGB;
+                    texture._glInternalFormat = gl.RGB;
+                    texture._glPixelType = gl.UNSIGNED_BYTE;
+                    break;
+                case pc.PIXELFORMAT_R8_G8_B8_A8:
+                    texture._glFormat = gl.RGBA;
+                    texture._glInternalFormat = gl.RGBA;
+                    texture._glPixelType = gl.UNSIGNED_BYTE;
+                    break;
+                case pc.PIXELFORMAT_DXT1:
+                    ext = this.extCompressedTextureS3TC;
+                    texture._glFormat = gl.RGB;
+                    texture._glInternalFormat = ext.COMPRESSED_RGB_S3TC_DXT1_EXT;
+                    break;
+                case pc.PIXELFORMAT_DXT3:
+                    ext = this.extCompressedTextureS3TC;
+                    texture._glFormat = gl.RGBA;
+                    texture._glInternalFormat = ext.COMPRESSED_RGBA_S3TC_DXT3_EXT;
+                    break;
+                case pc.PIXELFORMAT_DXT5:
+                    ext = this.extCompressedTextureS3TC;
+                    texture._glFormat = gl.RGBA;
+                    texture._glInternalFormat = ext.COMPRESSED_RGBA_S3TC_DXT5_EXT;
+                    break;
+                case pc.PIXELFORMAT_RGB16F:
+                    ext = this.extTextureHalfFloat;
+                    texture._glFormat = gl.RGB;
+                    texture._glInternalFormat = gl.RGB;
+                    texture._glPixelType = ext.HALF_FLOAT_OES;
+                    break;
+                case pc.PIXELFORMAT_RGBA16F:
+                    ext = this.extTextureHalfFloat;
+                    texture._glFormat = gl.RGBA;
+                    texture._glInternalFormat = gl.RGBA;
+                    texture._glPixelType = ext.HALF_FLOAT_OES;
+                    break;
+                case pc.PIXELFORMAT_RGB32F:
+                    texture._glFormat = gl.RGB;
+                    texture._glInternalFormat = gl.RGB;
+                    texture._glPixelType = gl.FLOAT;
+                    break;
+                case pc.PIXELFORMAT_RGBA32F:
+                    texture._glFormat = gl.RGBA;
+                    texture._glInternalFormat = gl.RGBA;
+                    texture._glPixelType = gl.FLOAT;
+                    break;
+            }
+        },
+
+        uploadTexture: function (texture) {
+            var gl = this.gl;
+
+            var mipLevel = 0;
+            var mipObject;
+
+            while(texture._levels[mipLevel] || mipLevel==0) { // Upload all existing mip levels. Initialize 0 mip anyway.
+                mipObject = texture._levels[mipLevel];
+
+                if (mipLevel==1 && !texture._compressed) {
+                    // We have more than one mip levels we want to assign, but we need all mips to make
+                    // the texture complete. Therefore first generate all mip chain from 0, then assign custom mips.
+                    gl.generateMipmap(texture._glTarget);
+                }
+
+                if (texture._cubemap) {
+                    var face;
+
+                    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+                    gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+                    if ((mipObject[0] instanceof HTMLCanvasElement) || (mipObject[0] instanceof HTMLImageElement) || (mipObject[0] instanceof HTMLVideoElement)) {
+                        // Upload the image, canvas or video
+                        for (face = 0; face < 6; face++) {
+                            var src = mipObject[face];
+                            // Downsize images that are too large to be used as cube maps
+                            if (src instanceof HTMLImageElement) {
+                                if (src.width > this.maxCubeMapSize || src.height > this.maxCubeMapSize) {
+                                    src = _downsampleImage(src, this.maxCubeMapSize);
+                                }
+                            }
+
+                            gl.texImage2D(gl.TEXTURE_CUBE_MAP_POSITIVE_X + face,
+                                          mipLevel,
+                                          texture._glInternalFormat,
+                                          texture._glFormat,
+                                          texture._glPixelType,
+                                          src);
+                        }
+                    } else {
+                        // Upload the byte array
+                        var resMult = 1 / Math.pow(2, mipLevel);
+                        for (face = 0; face < 6; face++) {
+
+                            if (texture._compressed) {
+                                if (this.extCompressedTextureS3TC) {
+                                    gl.compressedTexImage2D(gl.TEXTURE_CUBE_MAP_POSITIVE_X + face,
+                                                            mipLevel,
+                                                            texture._glInternalFormat,
+                                                            Math.max(texture._width * resMult, 1),
+                                                            Math.max(texture._height * resMult, 1),
+                                                            0,
+                                                            mipObject[face]);
+                                }
+                            } else {
+                                gl.texImage2D(gl.TEXTURE_CUBE_MAP_POSITIVE_X + face,
+                                              mipLevel,
+                                              texture._glInternalFormat,
+                                              Math.max(texture._width * resMult, 1),
+                                              Math.max(texture._height * resMult, 1),
+                                              0,
+                                              texture._glFormat,
+                                              texture._glPixelType,
+                                              mipObject[face]);
+                            }
+                        }
+                    }
+                } else {
+                    if ((mipObject instanceof HTMLCanvasElement) || (mipObject instanceof HTMLImageElement) || (mipObject instanceof HTMLVideoElement)) {
+                        // Downsize images that are too large to be used as textures
+                        if (mipObject instanceof HTMLImageElement) {
+                            if (mipObject.width > this.maxTextureSize || mipObject.height > this.maxTextureSize) {
+                                mipObject = _downsampleImage(mipObject, this.maxTextureSize);
+                            }
+                        }
+
+                        // Upload the image, canvas or video
+                        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+                        gl.pixelStorei(gl.UNPACK_PREMULTIPLY_ALPHA_WEBGL, false);
+                        gl.texImage2D(gl.TEXTURE_2D,
+                                      mipLevel,
+                                      texture._glInternalFormat,
+                                      texture._glFormat,
+                                      texture._glPixelType,
+                                      mipObject);
+                    } else {
+                        // Upload the byte array
+                        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+                        var resMult = 1 / Math.pow(2, mipLevel);
+                        if (texture._compressed) {
+                            if (this.extCompressedTextureS3TC) {
+                                gl.compressedTexImage2D(gl.TEXTURE_2D,
+                                                        mipLevel,
+                                                        texture._glInternalFormat,
+                                                        Math.max(texture._width * resMult, 1),
+                                                        Math.max(texture._height * resMult, 1),
+                                                        0,
+                                                        mipObject);
+                            }
+                        } else {
+                            gl.texImage2D(gl.TEXTURE_2D,
+                                          mipLevel,
+                                          texture._glInternalFormat,
+                                          Math.max(texture._width * resMult, 1),
+                                          Math.max(texture._height * resMult, 1),
+                                          0,
+                                          texture._glFormat,
+                                          texture._glPixelType,
+                                          mipObject);
+                        }
+                    }
+                }
+                mipLevel++;
+            }
+
+
+            if (texture.autoMipmap && pc.math.powerOfTwo(texture._width) && pc.math.powerOfTwo(texture._height) && texture._levels.length === 1 && !texture._compressed) {
+                gl.generateMipmap(texture._glTarget);
+            }
+        },
+
+        setTexture: function (texture, textureUnit) {
+            var gl = this.gl;
+
+            if (!texture._glTextureId) {
+                this.initializeTexture(texture);
+            }
+
+            gl.activeTexture(gl.TEXTURE0 + textureUnit);
+            if (this.textureUnits[textureUnit] !== texture) {
+                gl.bindTexture(texture._glTarget, texture._glTextureId);
+                this.textureUnits[textureUnit] = texture;
+            }
+
+            gl.texParameteri(texture._glTarget, gl.TEXTURE_MIN_FILTER, this.glFilter[texture._minFilter]);
+            gl.texParameteri(texture._glTarget, gl.TEXTURE_MAG_FILTER, this.glFilter[texture._magFilter]);
+
+            gl.texParameteri(texture._glTarget, gl.TEXTURE_WRAP_S, this.glAddress[texture._addressU]);
+            gl.texParameteri(texture._glTarget, gl.TEXTURE_WRAP_T, this.glAddress[texture._addressV]);
+
+            var ext = this.extTextureFilterAnisotropic;
+            if (ext) {
+                var maxAnisotropy = this.maxAnisotropy;
+                var anisotropy = texture.anisotropy;
+                anisotropy = Math.min(anisotropy, maxAnisotropy);
+                gl.texParameterf(texture._glTarget, ext.TEXTURE_MAX_ANISOTROPY_EXT, anisotropy);
+            }
+
+            if (texture._needsUpload) {
+                this.uploadTexture(texture);
+                texture._needsUpload = false;
+            }
         },
 
         /**
          * @function
-         * @name pc.gfx.Device#draw
+         * @name pc.GraphicsDevice#draw
          * @description Submits a graphical primitive to the hardware for immediate rendering.
          * @param {Object} primitive Primitive object describing how to submit current vertex/index buffers defined as follows:
-         * @param {pc.gfx.PRIMITIVE} primitive.type The type of primitive to render.
+         * @param {pc.PRIMITIVE} primitive.type The type of primitive to render.
          * @param {Number} primitive.base The offset of the first index or vertex to dispatch in the draw call.
          * @param {Number} primitive.count The number of indices or vertices to dispatch in the draw call.
          * @param {Boolean} primitive.indexed True to interpret the primitive as indexed, thereby using the currently set index buffer and false otherwise.
          * @example
          * // Render a single, unindexed triangle
          * device.draw({
-         *     type: pc.gfx.PRIMITIVE_TRIANGLES,
+         *     type: pc.PRIMITIVE_TRIANGLES,
          *     base: 0,
          *     count: 3,
          *     indexed: false
@@ -501,13 +867,10 @@ pc.extend(pc.gfx, function () {
                 sampler = samplers[i];
                 samplerValue = sampler.scopeId.value;
 
-                if (samplerValue instanceof pc.gfx.Texture) {
+                if (samplerValue instanceof pc.Texture) {
                     texture = samplerValue;
-                    if (this.textureUnits[textureUnit] !== texture) {
-                        gl.activeTexture(gl.TEXTURE0 + textureUnit);
-                        texture.bind();
-                        this.textureUnits[textureUnit] = texture;
-                    }
+                    this.setTexture(texture, textureUnit);
+
                     if (sampler.slot !== textureUnit) {
                         gl.uniform1i(sampler.locationId, textureUnit);
                         sampler.slot = textureUnit;
@@ -518,11 +881,8 @@ pc.extend(pc.gfx, function () {
                     numTexures = samplerValue.length;
                     for (j = 0; j < numTexures; j++) {
                         texture = samplerValue[j];
-                        if (this.textureUnits[textureUnit] !== texture) {
-                            gl.activeTexture(gl.TEXTURE0 + textureUnit);
-                            texture.bind();
-                            this.textureUnits[textureUnit] = texture;
-                        }
+                        this.setTexture(texture, textureUnit);
+
                         sampler.array[j] = textureUnit;
                         textureUnit++;
                     }
@@ -543,7 +903,9 @@ pc.extend(pc.gfx, function () {
                     uniformVersion.revision = programVersion.revision;
 
                     // Call the function to commit the uniform value
-                    this.commitFunction[uniform.dataType](uniform.locationId, scopeId.value);
+                    if (scopeId.value!==null) {
+                        this.commitFunction[uniform.dataType](uniform.locationId, scopeId.value);
+                    }
                 }
             }
 
@@ -561,12 +923,12 @@ pc.extend(pc.gfx, function () {
 
         /**
          * @function
-         * @name pc.gfx.Device#clear
+         * @name pc.GraphicsDevice#clear
          * @description Clears the frame buffer of the currently set render target.
          * @param {Object} options Optional options object that controls the behavior of the clear operation defined as follows:
          * @param {Array} options.color The color to clear the color buffer to in the range 0.0 to 1.0 for each component.
          * @param {Number} options.depth The depth value to clear the depth buffer to in the range 0.0 to 1.0.
-         * @param {pc.gfx.CLEARFLAG} options.flags The buffers to clear (the types being color, depth and stencil).
+         * @param {pc.CLEARFLAG} options.flags The buffers to clear (the types being color, depth and stencil).
          * @example
          * // Clear color buffer to black and depth buffer to 1.0
          * device.clear();
@@ -574,14 +936,14 @@ pc.extend(pc.gfx, function () {
          * // Clear just the color buffer to red
          * device.clear({
          *     color: [1, 0, 0, 1],
-         *     flags: pc.gfx.CLEARFLAG_COLOR
+         *     flags: pc.CLEARFLAG_COLOR
          * });
          *
          * // Clear color buffer to yellow and depth to 1.0
          * device.clear({
          *     color: [1, 1, 0, 1],
          *     depth: 1.0,
-         *     flags: pc.gfx.CLEARFLAG_COLOR | pc.gfx.CLEARFLAG_DEPTH
+         *     flags: pc.CLEARFLAG_COLOR | pc.CLEARFLAG_DEPTH
          * });
          */
         clear: function (options) {
@@ -590,21 +952,37 @@ pc.extend(pc.gfx, function () {
 
             var flags = (options.flags === undefined) ? defaultOptions.flags : options.flags;
             if (flags !== 0) {
+                var gl = this.gl;
+
                 // Set the clear color
-                if (flags & pc.gfx.CLEARFLAG_COLOR) {
+                if (flags & pc.CLEARFLAG_COLOR) {
                     var color = (options.color === undefined) ? defaultOptions.color : options.color;
                     this.setClearColor(color[0], color[1], color[2], color[3]);
                 }
 
-                if (flags & pc.gfx.CLEARFLAG_DEPTH) {
+                if (flags & pc.CLEARFLAG_DEPTH) {
                     // Set the clear depth
                     var depth = (options.depth === undefined) ? defaultOptions.depth : options.depth;
                     this.setClearDepth(depth);
+                    if (!this.depthWrite) {
+                        gl.depthMask(true);
+                    }
                 }
 
                 // Clear the frame buffer
-                this.gl.clear(this.glClearFlag[flags]);
+                gl.clear(this.glClearFlag[flags]);
+
+                if (flags & pc.CLEARFLAG_DEPTH) {
+                    if (!this.depthWrite) {
+                        gl.depthMask(false);
+                    }
+                }
             }
+        },
+
+        readPixels: function (x, y, w, h, pixels) {
+            var gl = this.gl;
+            gl.readPixels(x, y, w, h, gl.RGBA, gl.UNSIGNED_BYTE, pixels);
         },
 
         setClearDepth: function (depth) {
@@ -626,11 +1004,11 @@ pc.extend(pc.gfx, function () {
 
         /**
          * @function
-         * @name pc.gfx.Device#setRenderTarget
+         * @name pc.GraphicsDevice#setRenderTarget
          * @description Sets the specified render target on the device. If null
          * is passed as a parameter, the back buffer becomes the current target
          * for all rendering operations.
-         * @param {pc.gfx.RenderTarget} The render target to activate.
+         * @param {pc.RenderTarget} The render target to activate.
          * @example
          * // Set a render target to receive all rendering output
          * device.setRenderTarget(renderTarget);
@@ -644,9 +1022,9 @@ pc.extend(pc.gfx, function () {
 
         /**
          * @function
-         * @name pc.gfx.Device#getRenderTarget
+         * @name pc.GraphicsDevice#getRenderTarget
          * @description Queries the currently set render target on the device.
-         * @returns {pc.gfx.RenderTarget} The current render target.
+         * @returns {pc.RenderTarget} The current render target.
          * @example
          * // Get the current render target
          * var renderTarget = device.getRenderTarget();
@@ -657,7 +1035,7 @@ pc.extend(pc.gfx, function () {
 
         /**
          * @function
-         * @name pc.gfx.Device#getDepthTest
+         * @name pc.GraphicsDevice#getDepthTest
          * @description Queries whether depth testing is enabled.
          * @returns {Boolean} true if depth testing is enabled and false otherwise.
          * @example
@@ -670,7 +1048,7 @@ pc.extend(pc.gfx, function () {
 
         /**
          * @function
-         * @name pc.gfx.Device#setDepthTest
+         * @name pc.GraphicsDevice#setDepthTest
          * @description Enables or disables depth testing of fragments. Once this state
          * is set, it persists until it is changed. By default, depth testing is enabled.
          * @param {Boolean} depthTest true to enable depth testing and false otherwise.
@@ -691,7 +1069,7 @@ pc.extend(pc.gfx, function () {
 
         /**
          * @function
-         * @name pc.gfx.Device#getDepthWrite
+         * @name pc.GraphicsDevice#getDepthWrite
          * @description Queries whether writes to the depth buffer are enabled.
          * @returns {Boolean} true if depth writing is enabled and false otherwise.
          * @example
@@ -704,7 +1082,7 @@ pc.extend(pc.gfx, function () {
 
         /**
          * @function
-         * @name pc.gfx.Device#setDepthWrite
+         * @name pc.GraphicsDevice#setDepthWrite
          * @description Enables or disables writes to the depth buffer. Once this state
          * is set, it persists until it is changed. By default, depth writes are enabled.
          * @param {Boolean} writeDepth true to enable depth writing and false otherwise.
@@ -720,7 +1098,7 @@ pc.extend(pc.gfx, function () {
 
         /**
          * @function
-         * @name pc.gfx.Device#setColorWrite
+         * @name pc.GraphicsDevice#setColorWrite
          * @description Enables or disables writes to the color buffer. Once this state
          * is set, it persists until it is changed. By default, color writes are enabled
          * for all color channels.
@@ -747,7 +1125,9 @@ pc.extend(pc.gfx, function () {
 
         /**
          * @function
-         * @name pc.gfx.Device#getBlending
+         * @name pc.GraphicsDevice#getBlending
+         * @description Queries whether blending is enabled.
+         * @returns {Boolean} True if blending is enabled and false otherwise.
          */
         getBlending: function () {
             return this.blending;
@@ -755,7 +1135,9 @@ pc.extend(pc.gfx, function () {
 
         /**
          * @function
-         * @name pc.gfx.Device#setBlending
+         * @name pc.GraphicsDevice#setBlending
+         * @description Enables or disables blending.
+         * @param {Boolean} blending True to enable blending and false to disable it.
          */
         setBlending: function (blending) {
             if (this.blending !== blending) {
@@ -771,7 +1153,10 @@ pc.extend(pc.gfx, function () {
 
         /**
          * @function
-         * @name pc.gfx.Device#setBlendFunction
+         * @name pc.GraphicsDevice#setBlendFunction
+         * @description Configures blending operations.
+         * @param {pc.BLENDMODE} blendSrc The source blend function.
+         * @param {pc.BLENDMODE} blendDst The destination blend function.
          */
         setBlendFunction: function (blendSrc, blendDst) {
             if ((this.blendSrc !== blendSrc) || (this.blendDst !== blendDst)) {
@@ -783,7 +1168,10 @@ pc.extend(pc.gfx, function () {
 
         /**
          * @function
-         * @name pc.gfx.Device#setBlendEquation
+         * @name pc.GraphicsDevice#setBlendEquation
+         * @description Configures the blending equation. The default blend equation is
+         * pc.BLENDEQUATION_ADD.
+         * @param {pc.BLENDEQUATION} blendEquation The blend equation.
          */
         setBlendEquation: function (blendEquation) {
             if (this.blendEquation !== blendEquation) {
@@ -795,24 +1183,27 @@ pc.extend(pc.gfx, function () {
 
         /**
          * @function
-         * @name pc.gfx.Device#setCullMode
+         * @name pc.GraphicsDevice#setCullMode
+         * @description Configures the cull mode. The default cull mode is
+         * pc.CULLFACE_BACK.
+         * @param {pc.CULLFACE} cullMode The cull mode.
          */
         setCullMode: function (cullMode) {
             if (this.cullMode !== cullMode) {
                 var gl = this.gl;
                 switch (cullMode) {
-                    case pc.gfx.CULLFACE_NONE:
+                    case pc.CULLFACE_NONE:
                         gl.disable(gl.CULL_FACE);
                         break;
-                    case pc.gfx.CULLFACE_FRONT:
+                    case pc.CULLFACE_FRONT:
                         gl.enable(gl.CULL_FACE);
                         gl.cullFace(gl.FRONT);
                         break;
-                    case pc.gfx.CULLFACE_BACK:
+                    case pc.CULLFACE_BACK:
                         gl.enable(gl.CULL_FACE);
                         gl.cullFace(gl.BACK);
                         break;
-                    case pc.gfx.CULLFACE_FRONTANDBACK:
+                    case pc.CULLFACE_FRONTANDBACK:
                         gl.enable(gl.CULL_FACE);
                         gl.cullFace(gl.FRONT_AND_BACK);
                         break;
@@ -823,11 +1214,11 @@ pc.extend(pc.gfx, function () {
 
         /**
          * @function
-         * @name pc.gfx.Device#setIndexBuffer
+         * @name pc.GraphicsDevice#setIndexBuffer
          * @description Sets the current index buffer on the graphics device. On subsequent
-         * calls to pc.gfx.Device#draw, the specified index buffer will be used to provide
+         * calls to pc.GraphicsDevice#draw, the specified index buffer will be used to provide
          * index data for any indexed primitives.
-         * @param {pc.gfx.IndexBuffer} indexBuffer The index buffer to assign to the device.
+         * @param {pc.IndexBuffer} indexBuffer The index buffer to assign to the device.
          */
         setIndexBuffer: function (indexBuffer) {
             // Store the index buffer
@@ -842,11 +1233,11 @@ pc.extend(pc.gfx, function () {
 
         /**
          * @function
-         * @name pc.gfx.Device#setVertexBuffer
+         * @name pc.GraphicsDevice#setVertexBuffer
          * @description Sets the current vertex buffer for a specific stream index on the graphics
-         * device. On subsequent calls to pc.gfx.Device#draw, the specified vertex buffer will be
+         * device. On subsequent calls to pc.GraphicsDevice#draw, the specified vertex buffer will be
          * used to provide vertex data for any primitives.
-         * @param {pc.gfx.VertexBuffer} vertexBuffer The vertex buffer to assign to the device.
+         * @param {pc.VertexBuffer} vertexBuffer The vertex buffer to assign to the device.
          * @param {Number} stream The stream index for the vertex buffer, indexed from 0 upwards.
          */
         setVertexBuffer: function (vertexBuffer, stream) {
@@ -871,9 +1262,9 @@ pc.extend(pc.gfx, function () {
 
         /**
          * @function
-         * @name pc.gfx.Device#setShader
+         * @name pc.GraphicsDevice#setShader
          * @description Sets the active shader to be used during subsequent draw calls.
-         * @param {pc.gfx.Shader} shader The shader to set to assign to the device.
+         * @param {pc.Shader} shader The shader to set to assign to the device.
          */
         setShader: function(shader) {
             if (shader !== this.shader) {
@@ -888,15 +1279,15 @@ pc.extend(pc.gfx, function () {
         },
 
         /**
-
+         * @private
          * @function
-         * @name pc.gfx.Device#getBoneLimit
+         * @name pc.GraphicsDevice#getBoneLimit
          * @description Queries the maximum number of bones that can be referenced by a shader.
-         * The shader generators (pc.gfx.programlib) use this number to specify the matrix array
+         * The shader generators (pc.programlib) use this number to specify the matrix array
          * size of the uniform 'matrix_pose[0]'. The value is calculated based on the number of
          * available uniform vectors available after subtracting the number taken by a typical
          * heavyweight shader. If a different number is required, it can be tuned via
-         * pc.gfx.Device#setBoneLimit.
+         * pc.GraphicsDevice#setBoneLimit.
          * @returns {Number} The maximum number of bones that can be supported by the host hardware.
          */
         getBoneLimit: function () {
@@ -904,8 +1295,9 @@ pc.extend(pc.gfx, function () {
         },
 
         /**
+         * @private
          * @function
-         * @name pc.gfx.Device#setBoneLimit
+         * @name pc.GraphicsDevice#setBoneLimit
          * @description Specifies the maximum number of bones that the device can support on
          * the current hardware. This function allows the default calculated value based on
          * available vector uniforms to be overridden.
@@ -915,59 +1307,18 @@ pc.extend(pc.gfx, function () {
             this.boneLimit = maxBones;
         },
 
-        /**
-         * @function
-         * @name pc.gfx.Device#enableValidation
-         * @description Activates additional validation within the engine. Internally,
-         * the WebGL error code is checked after every call to a WebGL function. If an error
-         * is detected, it will be output to the Javascript console. Note that enabling
-         * validation will have negative performance implications for the PlayCanvas runtime.
-         * @param {Boolean} enable true to activate validation and false to deactivate it.
-         */
+        /* DEPRECATED */
         enableValidation: function (enable) {
-            if (enable === true) {
-                if (this.gl instanceof WebGLRenderingContext) {
-
-                    // Create a new WebGLValidator object to
-                    // usurp the real WebGL context
-                    this.gl = new WebGLValidator(this.gl);
-                }
-            } else {
-                if (this.gl instanceof WebGLValidator) {
-
-                    // Unwrap the real WebGL context
-                    this.gl = Context.gl;
-                }
-            }
+            console.warn('enableValidation: This function is deprecated and will be removed shortly.');
         },
 
-        /**
-         * @function
-         * @name pc.gfx.Device#validate
-         * @description Performs a one time validation on the error state of the underlying
-         * WebGL API. Note that pc.gfx.Device#enableValidation does not have to be activated
-         * for this function to operate. If an error is detected, it is output to the
-         * Javascript console and the function returns false. Otherwise, the function returns
-         * true. If an error is detected, it will have been triggered by a WebGL call between
-         * the previous and this call to pc.gfx.Device#validate. If this is the first call to
-         * pc.gfx.Device#validate, it detects errors since the device was created.
-         * @returns {Boolean} false if there was an error and true otherwise.
-         */
         validate: function () {
-            var gl = this.gl;
-            var error = gl.getError();
-
-            if (error !== gl.NO_ERROR) {
-                Log.error("WebGL error: " + WebGLValidator.ErrorString[error]);
-                return false;
-            }
-
-            return true;
+            console.warn('validate: This function is deprecated and will be removed shortly.');
         },
 
         /**
         * @function
-        * @name pc.gfx.Device#resizeCanvas
+        * @name pc.GraphicsDevice#resizeCanvas
         * @description Sets the width and height of the canvas, then fires the 'resizecanvas' event.
         */
         resizeCanvas: function (width, height) {
@@ -978,23 +1329,17 @@ pc.extend(pc.gfx, function () {
         }
     };
 
-    Object.defineProperty(Device.prototype, 'maxSupportedMaxAnisotropy', {
-        get: function() {
-            return this.maxTextureMaxAnisotropy;
-        }
+    Object.defineProperty(GraphicsDevice.prototype, 'width', {
+        get: function () { return this.gl.drawingBufferWidth || this.canvas.width; }
     });
 
-    Object.defineProperty(Device.prototype, 'width', {
-        get: function() { return this.gl.drawingBufferWidth || this.canvas.width; }
+    Object.defineProperty(GraphicsDevice.prototype, 'height', {
+        get: function () { return this.gl.drawingBufferHeight || this.canvas.height; }
     });
 
-    Object.defineProperty(Device.prototype, 'height', {
-        get: function() { return this.gl.drawingBufferHeight || this.canvas.height; }
-    });
-
-    Object.defineProperty(Device.prototype, 'fullscreen', {
-        get: function() { return !!document.fullscreenElement; },
-        set: function(fullscreen) {
+    Object.defineProperty(GraphicsDevice.prototype, 'fullscreen', {
+        get: function () { return !!document.fullscreenElement; },
+        set: function (fullscreen) {
             if (fullscreen) {
                 var canvas = this.gl.canvas;
                 canvas.requestFullscreen();
@@ -1004,9 +1349,30 @@ pc.extend(pc.gfx, function () {
         }
     });
 
+    Object.defineProperty(GraphicsDevice.prototype, 'maxAnisotropy', {
+        get: ( function () {
+            var maxAniso;
+
+            return function () {
+                if (maxAniso === undefined) {
+                    maxAniso = 1;
+
+                    var gl = this.gl;
+                    var glExt = this.extTextureFilterAnisotropic;
+                    if (glExt) {
+                        maxAniso = gl.getParameter(glExt.MAX_TEXTURE_MAX_ANISOTROPY_EXT);
+                    }
+                }
+
+                return maxAniso;
+            }
+        } )()
+    });
+
     return {
         UnsupportedBrowserError: UnsupportedBrowserError,
         ContextCreationError: ContextCreationError,
-        Device: Device
+        GraphicsDevice: GraphicsDevice,
+        precalculatedTangents: true
     };
 }());

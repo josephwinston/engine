@@ -19,7 +19,9 @@ pc.math = {
      * var deg = Math.PI * pc.math.RAD_TO_DEG;
      */
     RAD_TO_DEG: 180 / Math.PI,
-    
+
+    INV_LOG2: 1 / Math.log(2),
+
     /**
      * @function
      * @name pc.math.clamp
@@ -166,16 +168,27 @@ pc.math = {
      * @name pc.math.powerOfTwo
      * @description Returns true if argument is a power-of-two and false otherwise.
      * @param {Number} x Number to check for power-of-two property.
-     * @returns {Boolean} true if power-of-two and false otherwise. 
+     * @returns {Boolean} true if power-of-two and false otherwise.
      */
     powerOfTwo: function (x) {
         return ((x !== 0) && !(x & (x - 1)));
     },
 
+    nextPowerOfTwo: function(val) {
+        val--;
+        val = (val >> 1) | val;
+        val = (val >> 2) | val;
+        val = (val >> 4) | val;
+        val = (val >> 8) | val;
+        val = (val >> 16) | val;
+        val++;
+        return val;
+    },
+
     /**
      * @function
      * @name pc.math.random
-     * @description Return a pseudo-random number between min and max. 
+     * @description Return a pseudo-random number between min and max.
      * The number generated is in the range [min, max), that is inclusive of the minimum but exclusive of the maximum.
      * @param {Number} min Lower bound for range.
      * @param {Number} max Upper bound for range.
@@ -233,3 +246,11 @@ pc.math = {
 
 pc.math.intToBytes = pc.math.intToBytes32;
 pc.math.bytesToInt = pc.math.bytesToInt32;
+
+// IE doesn't have native log2
+if (!Math.log2) {
+    Math.log2 = function(x) {
+        return Math.log(x) * this.INV_LOG2;
+    }
+}
+

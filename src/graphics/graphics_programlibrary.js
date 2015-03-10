@@ -1,4 +1,6 @@
-pc.extend(pc.gfx, function () {
+pc.extend(pc, function () {
+    'use strict';
+
     // Public interface
     var ProgramLibrary = function (device) {
         this._device = device;
@@ -34,7 +36,7 @@ pc.extend(pc.gfx, function () {
         if (!shader) {
             var gd = this._device;
             var shaderDefinition = generator.createShaderDefinition(gd, options);
-            shader = this._cache[key] = new pc.gfx.Shader(gd, shaderDefinition);
+            shader = this._cache[key] = new pc.Shader(gd, shaderDefinition);
         }
         return shader;
     };

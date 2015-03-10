@@ -1,27 +1,27 @@
-pc.extend(pc.fw, function () {
+pc.extend(pc, function () {
     var REMOTE_CAMERA_NEAR_CLIP = 0.5;
     var REMOTE_CAMERA_FAR_CLIP = 2;
 
     /**
-     * @name pc.fw.CameraComponentSystem
-     * @class Used to add and remove {@link pc.fw.CameraComponent}s from Entities. It also holds an
+     * @name pc.CameraComponentSystem
+     * @class Used to add and remove {@link pc.CameraComponent}s from Entities. It also holds an
      * array of all active cameras.
      * @constructor Create a new CameraComponentSystem
-     * @param {Object} context
-     * @extends pc.fw.ComponentSystem
+     * @param {Object} app
+     * @extends pc.ComponentSystem
      */
-    var CameraComponentSystem = function (context) {
+    var CameraComponentSystem = function (app) {
         this.id = 'camera';
         this.description = "Renders the scene from the location of the Entity.";
-        context.systems.add(this.id, this);
+        app.systems.add(this.id, this);
 
-        this.ComponentType = pc.fw.CameraComponent;
-        this.DataType = pc.fw.CameraComponentData;
+        this.ComponentType = pc.CameraComponent;
+        this.DataType = pc.CameraComponentData;
 
         this.schema = [{
             name: "enabled",
             displayName: "Enabled",
-            description: "Disabled cameras do not render anything",
+            description: "Enable or disable the component",
             type: "boolean",
             defaultValue: true
         }, {
@@ -133,11 +133,12 @@ pc.extend(pc.fw, function () {
         // holds all the active camera components
         this.cameras = [];
 
+        this.on('beforeremove', this.onBeforeRemove, this);
         this.on('remove', this.onRemove, this);
-        pc.fw.ComponentSystem.on('toolsUpdate', this.toolsUpdate, this);
+        pc.ComponentSystem.on('toolsUpdate', this.toolsUpdate, this);
 
     };
-    CameraComponentSystem = pc.inherits(CameraComponentSystem, pc.fw.ComponentSystem);
+    CameraComponentSystem = pc.inherits(CameraComponentSystem, pc.ComponentSystem);
 
     pc.extend(CameraComponentSystem.prototype, {
         initializeComponentData: function (component, data, properties) {
@@ -158,41 +159,42 @@ pc.extend(pc.fw, function () {
                 data.enabled = data.activate;
             }
 
-            data.camera = new pc.scene.CameraNode();
+            data.camera = new pc.Camera();
+            data._node = component.entity;
 
-            data.postEffects = new pc.posteffect.PostEffectQueue(this.context, component);
+            data.postEffects = new pc.PostEffectQueue(this.app, component);
 
-            if (this.context.designer && this.displayInTools(component.entity)) {
-                var material = new pc.scene.BasicMaterial();
+            if (this.app.designer && this.displayInTools(component.entity)) {
+                var material = new pc.BasicMaterial();
                 material.color = new pc.Color(1, 1, 0, 1);
                 material.update();
 
-                var indexBuffer = new pc.gfx.IndexBuffer(this.context.graphicsDevice, pc.gfx.INDEXFORMAT_UINT8, 24);
+                var indexBuffer = new pc.IndexBuffer(this.app.graphicsDevice, pc.INDEXFORMAT_UINT8, 24);
                 var indices = new Uint8Array(indexBuffer.lock());
                 indices.set([0,1,1,2,2,3,3,0, // Near plane
                              4,5,5,6,6,7,7,4, // Far plane
                              0,4,1,5,2,6,3,7]); // Near to far edges
                 indexBuffer.unlock();
 
-                var format = new pc.gfx.VertexFormat(this.context.graphicsDevice, [
-                    { semantic: pc.gfx.SEMANTIC_POSITION, components: 3, type: pc.gfx.ELEMENTTYPE_FLOAT32 }
+                var format = new pc.VertexFormat(this.app.graphicsDevice, [
+                    { semantic: pc.SEMANTIC_POSITION, components: 3, type: pc.ELEMENTTYPE_FLOAT32 }
                 ]);
 
-                var vertexBuffer = new pc.gfx.VertexBuffer(this.context.graphicsDevice, format, 8, pc.gfx.BUFFER_DYNAMIC);
+                var vertexBuffer = new pc.VertexBuffer(this.app.graphicsDevice, format, 8, pc.BUFFER_DYNAMIC);
 
-                var mesh = new pc.scene.Mesh();
+                var mesh = new pc.Mesh();
                 mesh.vertexBuffer = vertexBuffer;
                 mesh.indexBuffer[0] = indexBuffer;
-                mesh.primitive[0].type = pc.gfx.PRIMITIVE_LINES;
+                mesh.primitive[0].type = pc.PRIMITIVE_LINES;
                 mesh.primitive[0].base = 0;
                 mesh.primitive[0].count = indexBuffer.getNumIndices();
                 mesh.primitive[0].indexed = true;
 
-                var model = new pc.scene.Model();
-                model.graph = data.camera;
-                model.meshInstances = [ new pc.scene.MeshInstance(model.graph, mesh, material) ];
+                var model = new pc.Model();
+                model.graph = component.entity;
+                model.meshInstances = [ new pc.MeshInstance(model.graph, mesh, material) ];
 
-                this.context.scene.addModel(model);
+                this.app.scene.addModel(model);
 
                 data.model = model;
             }
@@ -219,15 +221,17 @@ pc.extend(pc.fw, function () {
             CameraComponentSystem._super.initializeComponentData.call(this, component, data, properties);
         },
 
+        onBeforeRemove: function (entity, component) {
+            this.removeCamera(component);
+        },
 
         onRemove: function (entity, data) {
-            if (this.context.designer && this.displayInTools(entity)) {
-                if (this.context.scene.containsModel(data.model)) {
-                    this.context.scene.removeModel(data.model);
+            if (this.app.designer && this.displayInTools(entity)) {
+                if (this.app.scene.containsModel(data.model)) {
+                    this.app.scene.removeModel(data.model);
                 }
             }
 
-            entity.removeChild(data.camera);
             data.camera = null;
         },
 
@@ -257,7 +261,7 @@ pc.extend(pc.fw, function () {
                 var projection  = component.projection;
 
                 var x, y;
-                if (projection === pc.scene.Projection.PERSPECTIVE) {
+                if (projection === pc.PROJECTION_PERSPECTIVE) {
                     y = Math.tan(fov / 2.0) * nearClip;
                 } else {
                     y = component.camera.getOrthoHeight();
@@ -278,7 +282,7 @@ pc.extend(pc.fw, function () {
                 positions[10] = -y;
                 positions[11] = -nearClip;
 
-                if (projection === pc.scene.Projection.PERSPECTIVE) {
+                if (projection === pc.PROJECTION_PERSPECTIVE) {
                     y = Math.tan(fov / 2.0) * farClip;
                     x = y * aspectRatio;
                 }
@@ -303,13 +307,13 @@ pc.extend(pc.fw, function () {
             this.sortCamerasByPriority();
 
             // add debug shape to designer
-            if (this.context.designer) {
+            if (this.app.designer) {
                 var model = camera.data.model;
 
                 if (model) {
-                    var scene = this.context.scene;
+                    var scene = this.app.scene;
                     if (!scene.containsModel(model)) {
-                        scene.addModel(model)
+                        scene.addModel(model);
                     }
                 }
             }
@@ -322,10 +326,10 @@ pc.extend(pc.fw, function () {
                 this.sortCamerasByPriority();
 
                 // remove debug shape from designer
-                if (this.context.designer) {
+                if (this.app.designer) {
                     var model = camera.data.model;
                     if (model) {
-                        this.context.scene.removeModel(model);
+                        this.app.scene.removeModel(model);
                     }
                 }
             }

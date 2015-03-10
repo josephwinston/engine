@@ -1,19 +1,19 @@
-pc.extend(pc.fw, function () {
+pc.extend(pc, function () {
 
     /**
-     * @name pc.fw.CollisionComponentSystem
+     * @name pc.CollisionComponentSystem
      * @constructor Creates a new CollisionComponentSystem.
-     * @class Manages creation of {@link pc.fw.CollisionComponent}s.
-     * @param {pc.fw.ApplicationContext} context The ApplicationContext for the running application.
-     * @extends pc.fw.ComponentSystem
+     * @class Manages creation of {@link pc.CollisionComponent}s.
+     * @param {pc.Application} app The running {pc.Application}
+     * @extends pc.ComponentSystem
      */
-     var CollisionComponentSystem = function CollisionComponentSystem (context) {
+     var CollisionComponentSystem = function CollisionComponentSystem (app) {
         this.id = "collision";
         this.description = "Specifies a collision volume.";
-        context.systems.add(this.id, this);
+        app.systems.add(this.id, this);
 
-        this.ComponentType = pc.fw.CollisionComponent;
-        this.DataType = pc.fw.CollisionComponentData;
+        this.ComponentType = pc.CollisionComponent;
+        this.DataType = pc.CollisionComponentData;
 
         this.schema = [{
             name: "enabled",
@@ -132,19 +132,19 @@ pc.extend(pc.fw, function () {
 
         this.on('remove', this.onRemove, this);
 
-        pc.fw.ComponentSystem.on('update', this.onUpdate, this);
-        pc.fw.ComponentSystem.on('toolsUpdate', this.onToolsUpdate, this);
+        pc.ComponentSystem.on('update', this.onUpdate, this);
+        pc.ComponentSystem.on('toolsUpdate', this.onToolsUpdate, this);
     };
 
-    CollisionComponentSystem = pc.inherits(CollisionComponentSystem, pc.fw.ComponentSystem);
+    CollisionComponentSystem = pc.inherits(CollisionComponentSystem, pc.ComponentSystem);
 
     CollisionComponentSystem.prototype = pc.extend(CollisionComponentSystem.prototype, {
         onLibraryLoaded: function () {
-            if (typeof(Ammo) !== 'undefined') {
+            if (typeof Ammo !== 'undefined') {
                 //
             } else {
                 // Unbind the update function if we haven't loaded Ammo by now
-                pc.fw.ComponentSystem.off('update', this.onUpdate, this);
+                pc.ComponentSystem.off('update', this.onUpdate, this);
             }
         },
 
@@ -175,7 +175,7 @@ pc.extend(pc.fw, function () {
         * in an internal implementations structure, before returning it.
         */
         _createImplementation: function (type) {
-            if (typeof this.implementations[type] === 'undefined') {
+            if (this.implementations[type] === undefined) {
                 var impl;
                 switch (type) {
                     case 'box':
@@ -228,7 +228,7 @@ pc.extend(pc.fw, function () {
                 data = components[id].data;
 
                 if (data.enabled && entity.enabled) {
-                    if (!entity.rigidbody) {
+                    if (!entity.rigidbody && entity.trigger) {
                         entity.trigger.syncEntityToBody();
                     }
                 }
@@ -241,20 +241,20 @@ pc.extend(pc.fw, function () {
         },
 
         updateDebugShape: function (entity, data, impl) {
-            var context = this.context;
+            var app = this.app;
 
-            if (typeof impl !== 'undefined') {
+            if (impl !== undefined) {
                 if (impl.hasDebugShape) {
                     if (data.model) {
-                        if (!context.scene.containsModel(data.model)) {
+                        if (!app.scene.containsModel(data.model)) {
                             if (entity.enabled && data.enabled) {
-                                context.scene.addModel(data.model);
-                                context.root.addChild(data.model.graph);
+                                app.scene.addModel(data.model);
+                                app.root.addChild(data.model.graph);
                             }
                         } else {
                             if (!data.enabled || !entity.enabled) {
-                                context.root.removeChild(data.model.graph);
-                                context.scene.removeModel(data.model);
+                                app.root.removeChild(data.model.graph);
+                                app.scene.removeModel(data.model);
                             }
                         }
                     }
@@ -282,7 +282,7 @@ pc.extend(pc.fw, function () {
 
         /**
         * @function
-        * @name pc.fw.CollisionComponentSystem#setDebugRender
+        * @name pc.CollisionComponentSystem#setDebugRender
         * @description Display collision shape outlines
         * @param {Boolean} value Enable or disable
         */
@@ -326,8 +326,8 @@ pc.extend(pc.fw, function () {
         beforeInitialize: function (component, data) {
             data.shape = this.createPhysicalShape(component.entity, data);
 
-            data.model = new pc.scene.Model();
-            data.model.graph = new pc.scene.GraphNode();
+            data.model = new pc.Model();
+            data.model.graph = new pc.GraphNode();
             data.model.meshInstances = [this.createDebugMesh(data)];
         },
 
@@ -358,13 +358,14 @@ pc.extend(pc.fw, function () {
             var entity = component.entity;
             var data = component.data;
 
-            if (typeof(Ammo) !== 'undefined') {
+            if (typeof Ammo !== 'undefined') {
                 data.shape = this.createPhysicalShape(component.entity, data);
                 if (entity.rigidbody) {
+                    entity.rigidbody.disableSimulation();
                     entity.rigidbody.createBody();
                 } else {
                     if (!entity.trigger) {
-                        entity.trigger = new pc.fw.Trigger(this.system.context, component, data);
+                        entity.trigger = new pc.Trigger(this.system.app, component, data);
                     } else {
                         entity.trigger.initialize(data);
                     }
@@ -408,9 +409,9 @@ pc.extend(pc.fw, function () {
         * Called when the collision is removed
         */
         remove: function (entity, data) {
-            var context = this.system.context;
+            var app = this.system.app;
             if (entity.rigidbody && entity.rigidbody.body) {
-                context.systems.rigidbody.removeBody(entity.rigidbody.body);
+                app.systems.rigidbody.removeBody(entity.rigidbody.body);
             }
 
             if (entity.trigger) {
@@ -418,9 +419,9 @@ pc.extend(pc.fw, function () {
                 delete entity.trigger;
             }
 
-            if (context.scene.containsModel(data.model)) {
-                context.root.removeChild(data.model.graph);
-                context.scene.removeModel(data.model);
+            if (app.scene.containsModel(data.model)) {
+                app.root.removeChild(data.model.graph);
+                app.scene.removeModel(data.model);
             }
         },
 
@@ -457,13 +458,13 @@ pc.extend(pc.fw, function () {
 
         createDebugMesh: function (data) {
             if (!this.mesh) {
-                var gd = this.system.context.graphicsDevice;
+                var gd = this.system.app.graphicsDevice;
 
-                var format = new pc.gfx.VertexFormat(gd, [
-                    { semantic: pc.gfx.SEMANTIC_POSITION, components: 3, type: pc.gfx.ELEMENTTYPE_FLOAT32 }
+                var format = new pc.VertexFormat(gd, [
+                    { semantic: pc.SEMANTIC_POSITION, components: 3, type: pc.ELEMENTTYPE_FLOAT32 }
                 ]);
 
-                var vertexBuffer = new pc.gfx.VertexBuffer(gd, format, 8);
+                var vertexBuffer = new pc.VertexBuffer(gd, format, 8);
                 var positions = new Float32Array(vertexBuffer.lock());
                 positions.set([
                     -0.5, -0.5, -0.5, -0.5, -0.5, 0.5, 0.5, -0.5, 0.5, 0.5, -0.5, -0.5,
@@ -471,7 +472,7 @@ pc.extend(pc.fw, function () {
                 ]);
                 vertexBuffer.unlock();
 
-                var indexBuffer = new pc.gfx.IndexBuffer(gd, pc.gfx.INDEXFORMAT_UINT8, 24);
+                var indexBuffer = new pc.IndexBuffer(gd, pc.INDEXFORMAT_UINT8, 24);
                 var indices = new Uint8Array(indexBuffer.lock());
                 indices.set([
                     0,1,1,2,2,3,3,0,
@@ -480,10 +481,10 @@ pc.extend(pc.fw, function () {
                 ]);
                 indexBuffer.unlock();
 
-                var mesh = new pc.scene.Mesh();
+                var mesh = new pc.Mesh();
                 mesh.vertexBuffer = vertexBuffer;
                 mesh.indexBuffer[0] = indexBuffer;
-                mesh.primitive[0].type = pc.gfx.PRIMITIVE_LINES;
+                mesh.primitive[0].type = pc.PRIMITIVE_LINES;
                 mesh.primitive[0].base = 0;
                 mesh.primitive[0].count = indexBuffer.getNumIndices();
                 mesh.primitive[0].indexed = true;
@@ -491,17 +492,17 @@ pc.extend(pc.fw, function () {
             }
 
             if (!this.material) {
-                var material = new pc.scene.BasicMaterial();
+                var material = new pc.BasicMaterial();
                 material.color = new pc.Color(0, 0, 1, 1);
                 material.update()
                 this.material = material;
             }
 
-            return new pc.scene.MeshInstance(data.model.graph, this.mesh, this.material);
+            return new pc.MeshInstance(data.model.graph, this.mesh, this.material);
         },
 
         createPhysicalShape: function (entity, data) {
-            if (typeof(Ammo) !== 'undefined') {
+            if (typeof Ammo !== 'undefined') {
                 var he = data.halfExtents;
                 var ammoHe = new Ammo.btVector3(he.x, he.y, he.z);
                 return new Ammo.btBoxShape(ammoHe);
@@ -534,15 +535,15 @@ pc.extend(pc.fw, function () {
     CollisionSphereSystemImpl.prototype = pc.extend(CollisionSphereSystemImpl.prototype, {
         createDebugMesh: function (data) {
             if (!this.mesh) {
-                var context = this.system.context;
-                var gd = context.graphicsDevice;
+                var app = this.system.app;
+                var gd = app.graphicsDevice;
 
                 // Create the graphical resources required to render a camera frustum
-                var format = new pc.gfx.VertexFormat(gd, [
-                    { semantic: pc.gfx.SEMANTIC_POSITION, components: 3, type: pc.gfx.ELEMENTTYPE_FLOAT32 }
+                var format = new pc.VertexFormat(gd, [
+                    { semantic: pc.SEMANTIC_POSITION, components: 3, type: pc.ELEMENTTYPE_FLOAT32 }
                 ]);
 
-                var vertexBuffer = new pc.gfx.VertexBuffer(gd, format, 240);
+                var vertexBuffer = new pc.VertexBuffer(gd, format, 240);
                 var positions = new Float32Array(vertexBuffer.lock());
 
                 var i, x = 0;
@@ -578,9 +579,9 @@ pc.extend(pc.fw, function () {
 
                 vertexBuffer.unlock();
 
-                var mesh = new pc.scene.Mesh();
+                var mesh = new pc.Mesh();
                 mesh.vertexBuffer = vertexBuffer;
-                mesh.primitive[0].type = pc.gfx.PRIMITIVE_LINES;
+                mesh.primitive[0].type = pc.PRIMITIVE_LINES;
                 mesh.primitive[0].base = 0;
                 mesh.primitive[0].count = vertexBuffer.getNumVertices();
                 mesh.primitive[0].indexed = false;
@@ -589,17 +590,17 @@ pc.extend(pc.fw, function () {
             }
 
             if (!this.material) {
-                var material = new pc.scene.BasicMaterial();
+                var material = new pc.BasicMaterial();
                 material.color = new pc.Color(0, 0, 1, 1);
                 material.update();
                 this.material = material;
             }
 
-            return new pc.scene.MeshInstance(data.model.graph, this.mesh, this.material);
+            return new pc.MeshInstance(data.model.graph, this.mesh, this.material);
         },
 
         createPhysicalShape: function (entity, data) {
-            if (typeof(Ammo) !== 'undefined') {
+            if (typeof Ammo !== 'undefined') {
                 return new Ammo.btSphereShape(data.radius);
             } else {
                 return undefined;
@@ -631,19 +632,19 @@ pc.extend(pc.fw, function () {
             if (data.model && data.model.meshInstances && data.model.meshInstances.length) {
                 return data.model.meshInstances[0];
             } else {
-                var gd = this.system.context.graphicsDevice;
+                var gd = this.system.app.graphicsDevice;
 
                 // Create the graphical resources required to render a capsule shape
-                var format = new pc.gfx.VertexFormat(gd, [
-                    { semantic: pc.gfx.SEMANTIC_POSITION, components: 3, type: pc.gfx.ELEMENTTYPE_FLOAT32 }
+                var format = new pc.VertexFormat(gd, [
+                    { semantic: pc.SEMANTIC_POSITION, components: 3, type: pc.ELEMENTTYPE_FLOAT32 }
                 ]);
 
-                var vertexBuffer = new pc.gfx.VertexBuffer(gd, format, 328, pc.gfx.BUFFER_DYNAMIC);
+                var vertexBuffer = new pc.VertexBuffer(gd, format, 328, pc.BUFFER_DYNAMIC);
                 this.updateCapsuleShape(data, vertexBuffer);
 
-                var mesh = new pc.scene.Mesh();
+                var mesh = new pc.Mesh();
                 mesh.vertexBuffer = vertexBuffer;
-                mesh.primitive[0].type = pc.gfx.PRIMITIVE_LINES;
+                mesh.primitive[0].type = pc.PRIMITIVE_LINES;
                 mesh.primitive[0].base = 0;
                 mesh.primitive[0].count = vertexBuffer.getNumVertices();
                 mesh.primitive[0].indexed = false;
@@ -653,17 +654,17 @@ pc.extend(pc.fw, function () {
 
             // no need to create a new material for each capsule shape
             if (!this.material) {
-                var material = new pc.scene.BasicMaterial();
+                var material = new pc.BasicMaterial();
                 material.color = new pc.Color(0, 0, 1, 1);
                 material.update();
                 this.material = material;
             }
 
-            return new pc.scene.MeshInstance(data.model.graph, mesh, this.material);
+            return new pc.MeshInstance(data.model.graph, mesh, this.material);
         },
 
         updateCapsuleShape: function(data, vertexBuffer) {
-            var axis = (typeof data.axis !== 'undefined') ? data.axis : 1;
+            var axis = (data.axis !== undefined) ? data.axis : 1;
             var radius = data.radius || 0.5;
             var height = Math.max((data.height || 2) - 2 * radius, 0);
 
@@ -749,11 +750,11 @@ pc.extend(pc.fw, function () {
 
         createPhysicalShape: function (entity, data) {
             var shape = null;
-            var axis = (typeof data.axis !== 'undefined') ? data.axis : 1;
+            var axis = (data.axis !== undefined) ? data.axis : 1;
             var radius = data.radius || 0.5;
             var height = Math.max((data.height || 2) - 2 * radius, 0);
 
-            if (typeof(Ammo) !== 'undefined') {
+            if (typeof Ammo !== 'undefined') {
                 switch (axis) {
                     case 0:
                         shape = new Ammo.btCapsuleShapeX(radius, height);
@@ -801,37 +802,37 @@ pc.extend(pc.fw, function () {
             if (data.model && data.model.meshInstances && data.model.meshInstances.length) {
                 return data.model.meshInstances[0];
             } else {
-                var gd = this.system.context.graphicsDevice;
+                var gd = this.system.app.graphicsDevice;
 
-                var format = new pc.gfx.VertexFormat(gd, [
-                    { semantic: pc.gfx.SEMANTIC_POSITION, components: 3, type: pc.gfx.ELEMENTTYPE_FLOAT32 }
+                var format = new pc.VertexFormat(gd, [
+                    { semantic: pc.SEMANTIC_POSITION, components: 3, type: pc.ELEMENTTYPE_FLOAT32 }
                 ]);
 
-                var vertexBuffer = new pc.gfx.VertexBuffer(gd, format, 168, pc.gfx.BUFFER_DYNAMIC);
+                var vertexBuffer = new pc.VertexBuffer(gd, format, 168, pc.BUFFER_DYNAMIC);
                 this.updateCylinderShape(data, vertexBuffer);
 
-                var mesh = new pc.scene.Mesh();
+                var mesh = new pc.Mesh();
                 mesh.vertexBuffer = vertexBuffer;
-                mesh.primitive[0].type = pc.gfx.PRIMITIVE_LINES;
+                mesh.primitive[0].type = pc.PRIMITIVE_LINES;
                 mesh.primitive[0].base = 0;
                 mesh.primitive[0].count = vertexBuffer.getNumVertices();
                 mesh.primitive[0].indexed = false;
 
                 if (!this.material) {
-                    var material = new pc.scene.BasicMaterial();
+                    var material = new pc.BasicMaterial();
                     material.color = new pc.Color(0, 0, 1, 1);
                     material.update();
                     this.material = material;
                 }
 
-                return new pc.scene.MeshInstance(data.model.graph, mesh, this.material);
+                return new pc.MeshInstance(data.model.graph, mesh, this.material);
             }
         },
 
         updateCylinderShape: function(data, vertexBuffer) {
-            var axis = (typeof data.axis !== 'undefined') ? data.axis : 1;
-            var radius = (typeof data.radius !== 'undefined') ? data.radius : 0.5;
-            var height = (typeof data.height !== 'undefined') ? data.height : 1;
+            var axis = (data.axis !== undefined) ? data.axis : 1;
+            var radius = (data.radius !== undefined) ? data.radius : 0.5;
+            var height = (data.height !== undefined) ? data.height : 1;
 
             var positions = new Float32Array(vertexBuffer.lock());
 
@@ -888,11 +889,11 @@ pc.extend(pc.fw, function () {
         createPhysicalShape: function (entity, data) {
             var halfExtents = null;
             var shape = null;
-            var axis = (typeof data.axis !== 'undefined') ? data.axis : 1;
-            var radius = (typeof data.radius !== 'undefined') ? data.radius : 0.5;
-            var height = (typeof data.height !== 'undefined') ? data.height : 1;
+            var axis = (data.axis !== undefined) ? data.axis : 1;
+            var radius = (data.radius !== undefined) ? data.radius : 0.5;
+            var height = (data.height !== undefined) ? data.height : 1;
 
-            if (typeof(Ammo) !== 'undefined') {
+            if (typeof Ammo !== 'undefined') {
                 switch (axis) {
                     case 0:
                         halfExtents = new Ammo.btVector3(height * 0.5, radius, radius);
@@ -944,7 +945,7 @@ pc.extend(pc.fw, function () {
         beforeInitialize: function (component, data) {},
 
         createPhysicalShape: function (entity, data) {
-            if (typeof(Ammo) !== 'undefined' && data.model) {
+            if (typeof Ammo !== 'undefined' && data.model) {
                 var model = data.model;
                 var shape = new Ammo.btCompoundShape();
 
@@ -952,7 +953,7 @@ pc.extend(pc.fw, function () {
                 for (i = 0; i < model.meshInstances.length; i++) {
                     var meshInstance = model.meshInstances[i];
                     var mesh = meshInstance.mesh;
-                    var ib = mesh.indexBuffer[pc.scene.RENDERSTYLE_SOLID];
+                    var ib = mesh.indexBuffer[pc.RENDERSTYLE_SOLID];
                     var vb = mesh.vertexBuffer;
 
                     var format = vb.getFormat();
@@ -960,7 +961,7 @@ pc.extend(pc.fw, function () {
                     var positions;
                     for (j = 0; j < format.elements.length; j++) {
                         var element = format.elements[j];
-                        if (element.name === pc.gfx.SEMANTIC_POSITION) {
+                        if (element.name === pc.SEMANTIC_POSITION) {
                             positions = new Float32Array(vb.lock(), element.offset);
                         }
                     }
@@ -1021,7 +1022,7 @@ pc.extend(pc.fw, function () {
         recreatePhysicalShapes: function (component) {
             var data = component.data;
 
-            if (data.asset) {
+            if (data.asset !== null) {
                 this.loadModelAsset(component);
             } else {
                 data.model = null;
@@ -1030,7 +1031,7 @@ pc.extend(pc.fw, function () {
         },
 
         loadModelAsset: function (component) {
-            var guid = component.data.asset;
+            var id = component.data.asset;
             var entity = component.entity;
             var data = component.data;
 
@@ -1038,18 +1039,24 @@ pc.extend(pc.fw, function () {
                 parent: entity.getRequest()
             };
 
-            var asset = this.system.context.assets.getAssetByResourceId(guid);
+            var asset = this.system.app.assets.getAssetById(id);
             if (!asset) {
-                logERROR(pc.string.format('Trying to load model before asset {0} is loaded.', guid));
+                logERROR(pc.string.format('Trying to load model before asset {0} is loaded.', id));
                 return;
             }
 
-            this.system.context.assets.load(asset, [], options).then(function (resources) {
-                var model = resources[0];
-                data.model = model;
+            // check if asset is cached
+            if (asset.resource) {
+                data.model = asset.resource;
                 this.doRecreatePhysicalShape(component);
-
-            }.bind(this));
+            } else {
+                // load asset asynchronously
+                this.system.app.assets.load(asset, [], options).then(function (resources) {
+                    var model = resources[0];
+                    data.model = model;
+                    this.doRecreatePhysicalShape(component);
+                }.bind(this));
+            }
         },
 
         doRecreatePhysicalShape: function (component) {
@@ -1067,7 +1074,7 @@ pc.extend(pc.fw, function () {
                     entity.rigidbody.createBody();
                 } else {
                     if (!entity.trigger) {
-                        entity.trigger = new pc.fw.Trigger(this.system.context, component, data);
+                        entity.trigger = new pc.Trigger(this.system.app, component, data);
                     } else {
                         entity.trigger.initialize(data);
                     }

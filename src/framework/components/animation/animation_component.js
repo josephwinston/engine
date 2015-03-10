@@ -1,17 +1,17 @@
-pc.extend(pc.fw, function () {
+pc.extend(pc, function () {
     /**
     * @component Animation
-    * @name pc.fw.AnimationComponent
+    * @name pc.AnimationComponent
     * @constructor Create a new AnimationComponent
     * @class The Animation Component allows an Entity to playback animations on models
-    * @param {pc.fw.AnimationComponentSystem} system The {@link pc.fw.ComponentSystem} that created this Component
-    * @param {pc.fw.Entity} entity The Entity that this Component is attached to
-    * @extends pc.fw.Component
+    * @param {pc.AnimationComponentSystem} system The {@link pc.ComponentSystem} that created this Component
+    * @param {pc.Entity} entity The Entity that this Component is attached to
+    * @extends pc.Component
     * @property {Boolean} enabled If false no animation will be played
     * @property {Number} speed Speed multiplier for animation play back speed. 1.0 is playback at normal speed, 0.0 pauses the animation
     * @property {Boolean} loop If true the animation will restart from the beginning when it reaches the end
     * @property {Boolean} activate If true the first animation asset will begin playing when the Pack is loaded
-    * @property {String[]} assets The array of animation assets
+    * @property {Number[]} assets The array of animation assets
     */
     var AnimationComponent = function (system, entity) {
         // Handle changes to the 'animations' value
@@ -21,15 +21,15 @@ pc.extend(pc.fw, function () {
         // Handle changes to the 'loop' value
         this.on('set_loop', this.onSetLoop, this);
     };
-    AnimationComponent = pc.inherits(AnimationComponent, pc.fw.Component);
+    AnimationComponent = pc.inherits(AnimationComponent, pc.Component);
 
     pc.extend(AnimationComponent.prototype, {
         /**
-         * @function 
-         * @name pc.fw.AnimationComponent#play
+         * @function
+         * @name pc.AnimationComponent#play
          * @description Start playing an animation
          * @param {String} name The name of the animation asset to begin playing.
-         * @param {Number} [blendTime] The time in seconds to blend from the current 
+         * @param {Number} [blendTime] The time in seconds to blend from the current
          * animation state to the start of the animation being set.
          */
         play: function (name, blendTime) {
@@ -43,7 +43,7 @@ pc.extend(pc.fw, function () {
             }
 
             blendTime = blendTime || 0;
-            
+
             var data = this.data;
 
             data.prevAnim = data.currAnim;
@@ -52,7 +52,7 @@ pc.extend(pc.fw, function () {
             if (data.model) {
                 data.blending = blendTime > 0;
                 if (data.blending) {
-                    // Blend from the current time of the current animation to the start of 
+                    // Blend from the current time of the current animation to the start of
                     // the newly specified animation over the specified blend time period.
                     data.blendTime = blendTime;
                     data.blendTimeRemaining = blendTime;
@@ -69,23 +69,23 @@ pc.extend(pc.fw, function () {
 
         /**
         * @function
-        * @name pc.fw.AnimationComponent#getAnimation
+        * @name pc.AnimationComponent#getAnimation
         * @description Return an animation
         * @param {String} name The name of the animation asset
-        * @returns {pc.anim.Animation} An Animation
+        * @returns {pc.Animation} An Animation
         */
         getAnimation: function (name) {
             return this.data.animations[name];
         },
-        
+
         setModel: function (model) {
             var data = this.data;
             if (model) {
                 // Create skeletons
                 var graph = model.getGraph();
-                data.fromSkel = new pc.anim.Skeleton(graph);
-                data.toSkel = new pc.anim.Skeleton(graph);
-                data.skeleton = new pc.anim.Skeleton(graph);
+                data.fromSkel = new pc.Skeleton(graph);
+                data.toSkel = new pc.Skeleton(graph);
+                data.skeleton = new pc.Skeleton(graph);
                 data.skeleton.setLooping(data.loop);
                 data.skeleton.setGraph(graph);
             }
@@ -97,36 +97,72 @@ pc.extend(pc.fw, function () {
             }
         },
 
-        loadAnimationAssets: function (guids) {
-            if (!guids || !guids.length) {
+        loadAnimationAssets: function (ids) {
+            if (!ids || !ids.length) {
                 return;
             }
-            
+
             var options = {
                 parent: this.entity.getRequest()
             };
 
-            var assets = guids.map(function (guid) {
-                return this.system.context.assets.getAssetByResourceId(guid);
+            var assets = ids.map(function (id) {
+                return this.system.app.assets.getAssetById(id);
             }, this);
 
-            var names = [];
-            var requests = assets.map(function (asset) {
-                if (!asset) {
-                    logERROR(pc.string.format('Trying to load animation component before assets {0} are loaded', guids));
-                } else {
-                    names.push(asset.name);
-                    return new pc.resources.AnimationRequest(asset.getFileUrl());    
-                }
-            });
+            var animations = {};
 
-            this.system.context.loader.request(requests, options).then(function (animResources) {
-                var animations = {};
-                for (var i = 0; i < requests.length; i++) {
-                    animations[names[i]] = animResources[i];
+            var names = [];
+            var requests = [];
+
+            for (var i=0, len=assets.length; i<len; i++) {
+                var asset = assets[i];
+                if (!asset) {
+                    logERROR(pc.string.format('Trying to load animation component before assets {0} are loaded', ids));
+                } else {
+
+                    // subscribe to change event so that we reload the animation if necessary
+                    asset.off('change', this.onAssetChanged, this);
+                    asset.on('change', this.onAssetChanged, this);
+
+                    // if the asset is in the cache try to load it synchronously
+                    if (asset.resource) {
+                        animations[asset.name] = asset.resource;
+                    } else {
+                        // otherwise create an async request
+                        names.push(asset.name);
+                        requests.push(new pc.resources.AnimationRequest(asset.getFileUrl()));
+                    }
                 }
+            }
+
+            if (requests.length) {
+                this.system.app.loader.request(requests, options).then(function (animResources) {
+                    for (var i = 0; i < requests.length; i++) {
+                        animations[names[i]] = animResources[i];
+                    }
+                    this.animations = animations;
+                }.bind(this));
+            } else {
                 this.animations = animations;
-            }.bind(this));
+            }
+        },
+
+        onAssetChanged: function (asset, attribute, newValue, oldValue) {
+            if (attribute === 'resource') {
+                // replace old animation with new one
+                if (newValue) {
+                    this.animations[asset.name] = newValue;
+                    if (this.data.currAnim === asset.name) {
+                        // restart animation
+                        if (this.data.playing && this.data.enabled && this.entity.enabled)  {
+                            this.play(asset.name, 0);
+                        }
+                    }
+                } else {
+                    delete this.animations[asset.name];
+                }
+            }
         },
 
         onSetAnimations: function (name, oldValue, newValue) {
@@ -149,15 +185,28 @@ pc.extend(pc.fw, function () {
                 break;
             }
         },
+
         onSetAssets: function (name, oldValue, newValue) {
+            if (oldValue && oldValue.length) {
+                for (var i = 0; i < oldValue.length; i++) {
+                    // unsubscribe from change event for old assets
+                    if (oldValue[i]) {
+                        var asset = this.system.app.assets.getAssetById(oldValue[i]);
+                        if (asset) {
+                            asset.off('change', this.onAssetChanged, this);
+                        }
+                    }
+                }
+            }
+
             this.loadAnimationAssets(newValue);
         },
-        
+
         onSetLoop: function (name, oldValue, newValue) {
             if (this.data.skeleton) {
                 this.data.skeleton.setLooping(this.data.loop);
             }
-        }, 
+        },
 
         onSetCurrentTime: function (name, oldValue, newValue) {
             this.data.skeleton.setCurrentTime(newValue);
@@ -167,7 +216,7 @@ pc.extend(pc.fw, function () {
 
         onEnable: function () {
             AnimationComponent._super.onEnable.call(this);
-            if ( this.data.activate && 
+            if ( this.data.activate &&
                  !this.data.currAnim) {
 
                 for (var animName in this.data.animations) {
@@ -181,7 +230,7 @@ pc.extend(pc.fw, function () {
     Object.defineProperties(AnimationComponent.prototype, {
         /**
         * @property
-        * @name pc.fw.AnimationComponent#currentTime
+        * @name pc.AnimationComponent#currentTime
         * @description Get or Set the current time position (in seconds) of the animation
         */
         currentTime: {
@@ -191,13 +240,13 @@ pc.extend(pc.fw, function () {
             set: function (currentTime) {
                 this.data.skeleton.setCurrentTime(currentTime);
                 this.data.skeleton.addTime(0);
-                this.data.skeleton.updateGraph();                
+                this.data.skeleton.updateGraph();
             }
         },
 
         /**
         * @property
-        * @name pc.fw.AnimationComponent#duration
+        * @name pc.AnimationComponent#duration
         * @description Get the duration in seconds of the current animation.
         */
         duration: {
